@@ -1,5 +1,5 @@
 # Rust-CtrlC
-Very simple wrapper around `signal` function to set a handler for SIGINT (^C).
+Very simple wrapper around `signal` function to set a handler for SIGINT (Ctrl-C).
 
 ## Example usage
 ```rust
@@ -14,8 +14,9 @@ fn main() {
     CtrlC::set_handler(move || {
         r.store(false, Ordering::SeqCst);
     });
+	println!("Waiting for Ctrl-C...");
     while running.load(Ordering::SeqCst) {}
-    println!("Exiting...");
+    println!("Got it! Exiting...");
 }
 ```
 

@@ -17,6 +17,7 @@ fn handler(_: c_int) {
     CVAR.notify_all();
 }
 
+#[allow(missing_copy_implementations)]
 pub struct CtrlC;
 impl CtrlC {
     pub fn set_handler<F: Fn() -> () + Send>(user_handler: F) -> () {
@@ -25,7 +26,7 @@ impl CtrlC {
         }
         Thread::spawn(move || {
             loop {
-                CVAR.wait(MUTEX.lock().unwrap());
+                let _ = CVAR.wait(MUTEX.lock().unwrap());
                 user_handler();
             }
         });
