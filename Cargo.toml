@@ -1,6 +1,6 @@
 [package]
 
-name = "rust-ctrlc"
+name = "ctrlc"
 version = "0.0.1"
 authors = ["Antti Keränen <detegr@gmail.com>"]
 license = "MIT"

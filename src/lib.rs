@@ -7,7 +7,6 @@ use libc::consts::os::posix88::SIGINT;
 use libc::funcs::posix01::signal::signal;
 use libc::c_int;
 use std::sync::{StaticCondvar, CONDVAR_INIT, StaticMutex, MUTEX_INIT};
-use std::thread::Thread;
 
 static CVAR: StaticCondvar = CONDVAR_INIT;
 static MUTEX: StaticMutex = MUTEX_INIT;
@@ -20,11 +19,11 @@ fn handler(_: c_int) {
 #[allow(missing_copy_implementations)]
 pub struct CtrlC;
 impl CtrlC {
-    pub fn set_handler<F: Fn() -> () + Send>(user_handler: F) -> () {
+    pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
         unsafe {
             signal(SIGINT, std::mem::transmute::<_, sighandler_t>(handler));
         }
-        Thread::spawn(move || {
+        std::thread::spawn(move || {
             loop {
                 let _ = CVAR.wait(MUTEX.lock().unwrap());
                 user_handler();
