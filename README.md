@@ -3,7 +3,7 @@ Very simple wrapper around `signal` function to set a handler for SIGINT (Ctrl-C
 
 ## Example usage
 ```rust
-extern crate "rust-ctrlc" as ctrlc;
+extern crate ctrlc;
 use ctrlc::CtrlC;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
