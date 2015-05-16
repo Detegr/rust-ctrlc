@@ -1,5 +1,6 @@
 #![feature(libc)]
 #![feature(std_misc)]
+#![feature(static_condvar)]
 
 extern crate libc;
 use libc::types::os::common::posix01::sighandler_t;
