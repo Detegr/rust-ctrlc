@@ -1,5 +1,5 @@
 # CtrlC
-Very simple wrapper around `signal` function to set a handler for SIGINT (Ctrl-C).
+A simple wrapper around ctrl-c signal handling.
 
 ## Example usage
 ```rust
