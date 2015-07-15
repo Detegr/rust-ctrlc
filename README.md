@@ -22,4 +22,4 @@ fn main() {
 
 ## TODO:
 * Do not allow set_handler to be called multiple times
-* Windows support
+* Is the handler function for Windows OK? It now returns true for every CtrlType.
