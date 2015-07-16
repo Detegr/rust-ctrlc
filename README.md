@@ -1,5 +1,6 @@
 # CtrlC
-A simple wrapper around ctrl-c signal handling.
+[![Build Status](https://travis-ci.org/Detegr/rust-ctrlc.svg?branch=master)](https://travis-ci.org/Detegr/rust-ctrlc)
+A simple easy to use wrapper around Ctrl-C signal.
 
 ## Example usage
 ```rust
@@ -20,6 +21,5 @@ fn main() {
 }
 ```
 
-## TODO:
-* Do not allow set_handler to be called multiple times
-* Is the handler function for Windows OK? It now returns true for every CtrlType.
+### Try the example yourself
+`cargo run --example readme_example`
