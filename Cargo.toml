@@ -10,10 +10,10 @@ homepage = "https://github.com/Detegr/rust-ctrlc"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 
 [dependencies]
-libc = "*"
+libc = "0.1"
 
 [dependencies.lazy_static]
-version = "*"
+version = "0.1"
 optional = true
 
 [features]
