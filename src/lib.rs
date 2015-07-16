@@ -1,3 +1,5 @@
+//! A simple easy to use wrapper around Ctrl-C signal.
+
 #![cfg_attr(feature="nightly", feature(static_condvar))]
 #![cfg_attr(feature="nightly", feature(static_mutex))]
 
@@ -20,7 +22,7 @@ mod features {
         pub static ref MUTEX: Mutex<bool> = Mutex::new(false);
     }
 }
-pub use self::features::*;
+use self::features::*;
 
 #[cfg(unix)]
 mod platform {
@@ -62,6 +64,11 @@ use self::platform::*;
 
 pub struct CtrlC;
 impl CtrlC {
+    /// Sets up the signal handler for Ctrl-C
+    /// # Example
+    /// ```
+    /// CtrlC::set_handler(|| println!("Hello world!"));
+    /// ```
     pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
         unsafe {
             set_os_handler(handler);
