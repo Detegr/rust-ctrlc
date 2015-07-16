@@ -25,6 +25,7 @@ mod platform {
 }
 #[cfg(windows)]
 mod platform {
+    use libc::c_int;
     type PHandlerRoutine = unsafe extern fn(CtrlType: c_int) -> bool;
 
     #[link(name = "kernel32")]
@@ -34,12 +35,12 @@ mod platform {
 
     #[repr(C)]
     pub fn handler(_: c_int) -> bool {
-        CVAR.notify_all();
+        super::CVAR.notify_all();
         true
     }
     #[inline]
-    pub unsafe fn set_os_handler(handler: fn(c_int)) {
-        SetConsoleCtrlHandler(std::mem::transmute::<_, PHandlerRoutine>(handler), true);
+    pub unsafe fn set_os_handler(handler: fn(c_int) -> bool) {
+        SetConsoleCtrlHandler(::std::mem::transmute::<_, PHandlerRoutine>(handler), true);
     }
 }
 use self::platform::*;
