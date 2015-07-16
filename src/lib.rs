@@ -2,30 +2,25 @@
 #![cfg_attr(feature="nightly", feature(static_mutex))]
 
 extern crate libc;
+#[cfg(feature="stable")]
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(feature="nightly")]
 mod features {
-    use super::platform::{handler, set_os_handler};
     use std::sync::{StaticCondvar, CONDVAR_INIT, StaticMutex, MUTEX_INIT};
     pub static CVAR: StaticCondvar = CONDVAR_INIT;
     pub static MUTEX: StaticMutex = MUTEX_INIT;
-
-    pub struct CtrlC;
-    impl CtrlC {
-        pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
-            unsafe {
-                set_os_handler(handler);
-            }
-            ::std::thread::spawn(move || {
-                loop {
-                    let _ = CVAR.wait(MUTEX.lock().unwrap());
-                    user_handler();
-                }
-            });
-        }
+}
+#[cfg(not(feature="nightly"))]
+mod features {
+    use std::sync::{Condvar, Mutex};
+    lazy_static! {
+        pub static ref CVAR: Condvar = Condvar::new();
+        pub static ref MUTEX: Mutex<bool> = Mutex::new(false);
     }
 }
-pub use self::features::CtrlC;
+pub use self::features::*;
 
 #[cfg(unix)]
 mod platform {
@@ -61,5 +56,21 @@ mod platform {
     #[inline]
     pub unsafe fn set_os_handler(handler: fn(c_int) -> bool) {
         SetConsoleCtrlHandler(::std::mem::transmute::<_, PHandlerRoutine>(handler), true);
+    }
+}
+use self::platform::*;
+
+pub struct CtrlC;
+impl CtrlC {
+    pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
+        unsafe {
+            set_os_handler(handler);
+        }
+        ::std::thread::spawn(move || {
+            loop {
+                let _ = CVAR.wait(MUTEX.lock().unwrap());
+                user_handler();
+            }
+        });
     }
 }

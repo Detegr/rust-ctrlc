@@ -12,5 +12,11 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 [dependencies]
 libc = "*"
 
+[dependencies.lazy_static]
+version = "*"
+optional = true
+
 [features]
+default = ["stable"]
 nightly = []
+stable = ["lazy_static"]
