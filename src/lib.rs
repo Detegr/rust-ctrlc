@@ -67,6 +67,7 @@ impl CtrlC {
     /// Sets up the signal handler for Ctrl-C
     /// # Example
     /// ```
+    /// use ctrlc::CtrlC;
     /// CtrlC::set_handler(|| println!("Hello world!"));
     /// ```
     pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
