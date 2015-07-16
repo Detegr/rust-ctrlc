@@ -45,9 +45,7 @@ mod platform {
 }
 use self::platform::*;
 
-#[allow(missing_copy_implementations)]
 pub struct CtrlC;
-
 impl CtrlC {
     pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
         unsafe {
