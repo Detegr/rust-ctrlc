@@ -3,6 +3,10 @@
 
 A simple easy to use wrapper around Ctrl-C signal.
 
+## Dependencies
+* [libc](https://crates.io/crates/libc)
+* [lazy_static](https://crates.io/crates/lazy_static) (only with stable and beta compilers)
+
 ## Example usage
 ```rust
 extern crate ctrlc;
@@ -22,5 +26,8 @@ fn main() {
 }
 ```
 
-### Try the example yourself
+#### Try the example yourself
 `cargo run --example readme_example`
+
+## Building
+If you're using a nightly compiler, I suggest building with `cargo build --features nightly` to avoid the dependency to lazy_static. On stable and beta compilers `cargo build` will do.
