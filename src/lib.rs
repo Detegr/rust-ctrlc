@@ -1,4 +1,3 @@
-#![feature(std_misc)]
 #![feature(static_condvar)]
 #![feature(static_mutex)]
 
