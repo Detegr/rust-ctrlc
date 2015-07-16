@@ -1,11 +1,31 @@
-#![feature(static_condvar)]
-#![feature(static_mutex)]
+#![cfg_attr(feature="nightly", feature(static_condvar))]
+#![cfg_attr(feature="nightly", feature(static_mutex))]
 
 extern crate libc;
 
-use std::sync::{StaticCondvar, CONDVAR_INIT, StaticMutex, MUTEX_INIT};
-static CVAR: StaticCondvar = CONDVAR_INIT;
-static MUTEX: StaticMutex = MUTEX_INIT;
+#[cfg(feature="nightly")]
+mod features {
+    use super::platform::{handler, set_os_handler};
+    use std::sync::{StaticCondvar, CONDVAR_INIT, StaticMutex, MUTEX_INIT};
+    pub static CVAR: StaticCondvar = CONDVAR_INIT;
+    pub static MUTEX: StaticMutex = MUTEX_INIT;
+
+    pub struct CtrlC;
+    impl CtrlC {
+        pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
+            unsafe {
+                set_os_handler(handler);
+            }
+            ::std::thread::spawn(move || {
+                loop {
+                    let _ = CVAR.wait(MUTEX.lock().unwrap());
+                    user_handler();
+                }
+            });
+        }
+    }
+}
+pub use self::features::CtrlC;
 
 #[cfg(unix)]
 mod platform {
@@ -16,7 +36,7 @@ mod platform {
 
     #[repr(C)]
     pub fn handler(_: c_int) {
-        super::CVAR.notify_all();
+        super::features::CVAR.notify_all();
     }
     #[inline]
     pub unsafe fn set_os_handler(handler: fn(c_int)) {
@@ -35,27 +55,11 @@ mod platform {
 
     #[repr(C)]
     pub fn handler(_: c_int) -> bool {
-        super::CVAR.notify_all();
+        super::features::CVAR.notify_all();
         true
     }
     #[inline]
     pub unsafe fn set_os_handler(handler: fn(c_int) -> bool) {
         SetConsoleCtrlHandler(::std::mem::transmute::<_, PHandlerRoutine>(handler), true);
-    }
-}
-use self::platform::*;
-
-pub struct CtrlC;
-impl CtrlC {
-    pub fn set_handler<F: Fn() -> () + 'static + Send>(user_handler: F) -> () {
-        unsafe {
-            set_os_handler(handler);
-        }
-        std::thread::spawn(move || {
-            loop {
-                let _ = CVAR.wait(MUTEX.lock().unwrap());
-                user_handler();
-            }
-        });
     }
 }
