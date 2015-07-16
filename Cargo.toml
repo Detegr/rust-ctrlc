@@ -4,8 +4,8 @@ name = "ctrlc"
 version = "0.1.0"
 authors = ["Antti Keränen <detegr@gmail.com>"]
 license = "MIT"
-keywords = ["ctrl", "control", "signal", "SIGINT"]
-description = "Easy ctrl-c handler for Rust projects"
+keywords = ["ctrlc", "ctrl", "ctrl-c", "control", "signal", "SIGINT", "SetConsoleCtrlHandler"]
+description = "Easy Ctrl-C handler for Rust projects"
 homepage = "https://github.com/Detegr/rust-ctrlc"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 
