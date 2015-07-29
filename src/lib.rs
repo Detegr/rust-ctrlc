@@ -3,7 +3,12 @@
 #![cfg_attr(feature="nightly", feature(static_condvar))]
 #![cfg_attr(feature="nightly", feature(static_mutex))]
 
+#[cfg(not(windows))]
 extern crate libc;
+#[cfg(windows)]
+extern crate winapi;
+#[cfg(windows)]
+extern crate kernel32;
 #[cfg(feature="stable")]
 #[macro_use]
 extern crate lazy_static;
@@ -42,22 +47,16 @@ mod platform {
 }
 #[cfg(windows)]
 mod platform {
-    use libc::c_int;
-    type PHandlerRoutine = unsafe extern fn(CtrlType: c_int) -> bool;
+    use kernel32::SetConsoleCtrlHandler;
+    use winapi::{BOOL, DWORD, TRUE};
 
-    #[link(name = "kernel32")]
-    extern {
-        fn SetConsoleCtrlHandler(HandlerRoutine: PHandlerRoutine, Add: bool) -> bool;
-    }
-
-    #[repr(C)]
-    pub fn handler(_: c_int) -> bool {
+    pub unsafe extern "system" fn handler(_: DWORD) -> BOOL {
         super::features::CVAR.notify_all();
-        true
+        TRUE
     }
     #[inline]
-    pub unsafe fn set_os_handler(handler: fn(c_int) -> bool) {
-        SetConsoleCtrlHandler(::std::mem::transmute::<_, PHandlerRoutine>(handler), true);
+    pub unsafe fn set_os_handler(handler: unsafe extern "system" fn(DWORD) -> BOOL) {
+        SetConsoleCtrlHandler(Some(handler), TRUE);
     }
 }
 use self::platform::*;
