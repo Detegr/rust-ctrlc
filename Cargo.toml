@@ -11,6 +11,8 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 
 [dependencies]
 libc = "0.1"
+winapi = "0.2"
+kernel32-sys = "0.1"
 
 [dependencies.lazy_static]
 version = "0.1"
