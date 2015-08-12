@@ -3,17 +3,11 @@
 #![cfg_attr(feature="nightly", feature(static_condvar))]
 #![cfg_attr(feature="nightly", feature(static_mutex))]
 
-use std::sync::atomic::Ordering;
-
-#[cfg(not(windows))]
-extern crate libc;
-#[cfg(windows)]
-extern crate winapi;
-#[cfg(windows)]
-extern crate kernel32;
 #[cfg(feature="stable")]
 #[macro_use]
 extern crate lazy_static;
+
+use std::sync::atomic::Ordering;
 
 #[cfg(feature="nightly")]
 mod features {
@@ -37,10 +31,11 @@ use self::features::*;
 
 #[cfg(unix)]
 mod platform {
-    use libc::c_int;
-    use libc::types::os::common::posix01::sighandler_t;
-    use libc::consts::os::posix88::SIGINT;
-    use libc::funcs::posix01::signal::signal;
+    extern crate libc;
+    use self::libc::c_int;
+    use self::libc::types::os::common::posix01::sighandler_t;
+    use self::libc::consts::os::posix88::SIGINT;
+    use self::libc::funcs::posix01::signal::signal;
     use std::sync::atomic::Ordering;
 
     #[repr(C)]
@@ -55,8 +50,10 @@ mod platform {
 }
 #[cfg(windows)]
 mod platform {
-    use kernel32::SetConsoleCtrlHandler;
-    use winapi::{BOOL, DWORD, TRUE};
+    extern crate winapi;
+    extern crate kernel32;
+    use self::kernel32::SetConsoleCtrlHandler;
+    use self::winapi::{BOOL, DWORD, TRUE};
     use std::sync::atomic::Ordering;
 
     pub unsafe extern "system" fn handler(_: DWORD) -> BOOL {
