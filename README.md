@@ -3,10 +3,6 @@
 
 A simple easy to use wrapper around Ctrl-C signal.
 
-## Dependencies
-* [libc](https://crates.io/crates/libc)
-* [lazy_static](https://crates.io/crates/lazy_static) (only with stable and beta compilers)
-
 ## Example usage
 ```rust
 extern crate ctrlc;
