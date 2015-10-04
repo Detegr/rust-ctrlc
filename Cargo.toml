@@ -1,7 +1,7 @@
 [package]
 
 name = "ctrlc"
-version = "0.1.2"
+version = "1.0.0"
 authors = ["Antti Keränen <detegr@gmail.com>"]
 license = "MIT"
 keywords = ["ctrlc", "signal", "SIGINT"]
