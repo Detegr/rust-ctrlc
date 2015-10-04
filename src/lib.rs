@@ -84,6 +84,7 @@ impl CtrlC {
             loop {
                 if !DONE.load(Ordering::Relaxed) {
                     let _ = CVAR.wait(MUTEX.lock().unwrap());
+                    DONE.store(false, Ordering::Relaxed);
                 }
                 user_handler();
             }
