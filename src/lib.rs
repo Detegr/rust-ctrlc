@@ -42,9 +42,9 @@ use self::features::*;
 mod platform {
     extern crate libc;
     use self::libc::c_int;
-    use self::libc::types::os::common::posix01::sighandler_t;
-    use self::libc::consts::os::posix88::SIGINT;
-    use self::libc::funcs::posix01::signal::signal;
+    use self::libc::sighandler_t;
+    use self::libc::SIGINT;
+    use self::libc::signal;
     use std::sync::atomic::Ordering;
 
     #[repr(C)]
