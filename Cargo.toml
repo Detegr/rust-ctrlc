@@ -3,7 +3,7 @@
 name = "ctrlc"
 version = "1.0.0"
 authors = ["Antti Keränen <detegr@gmail.com>"]
-license = "MIT"
+license = "MIT/Apache-2.0"
 keywords = ["ctrlc", "signal", "SIGINT"]
 description = "Easy Ctrl-C handler for Rust projects"
 homepage = "https://github.com/Detegr/rust-ctrlc"
