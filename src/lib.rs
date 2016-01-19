@@ -9,31 +9,10 @@
 
 //! A simple easy to use wrapper around Ctrl-C signal.
 
-#![cfg_attr(feature="nightly", feature(static_condvar))]
-#![cfg_attr(feature="nightly", feature(static_mutex))]
-
-#[cfg(feature="stable")]
-#[macro_use]
-extern crate lazy_static;
-
 use std::sync::atomic::Ordering;
 
-#[cfg(feature="nightly")]
 mod features {
     use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
-    use std::sync::{StaticCondvar, CONDVAR_INIT, StaticMutex, MUTEX_INIT};
-    pub static CVAR: StaticCondvar = CONDVAR_INIT;
-    pub static MUTEX: StaticMutex = MUTEX_INIT;
-    pub static DONE: AtomicBool = ATOMIC_BOOL_INIT;
-}
-#[cfg(not(feature="nightly"))]
-mod features {
-    use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
-    use std::sync::{Condvar, Mutex};
-    lazy_static! {
-        pub static ref CVAR: Condvar = Condvar::new();
-        pub static ref MUTEX: Mutex<bool> = Mutex::new(false);
-    }
     pub static DONE: AtomicBool = ATOMIC_BOOL_INIT;
 }
 use self::features::*;
@@ -50,7 +29,6 @@ mod platform {
     #[repr(C)]
     pub fn handler(_: c_int) {
         super::features::DONE.store(true, Ordering::Relaxed);
-        super::features::CVAR.notify_all();
     }
     #[inline]
     pub unsafe fn set_os_handler(handler: fn(c_int)) {
@@ -67,7 +45,6 @@ mod platform {
 
     pub unsafe extern "system" fn handler(_: DWORD) -> BOOL {
         super::features::DONE.store(true, Ordering::Relaxed);
-        super::features::CVAR.notify_all();
         TRUE
     }
     #[inline]
@@ -91,11 +68,10 @@ impl CtrlC {
         }
         ::std::thread::spawn(move || {
             loop {
-                if !DONE.load(Ordering::Relaxed) {
-                    let _ = CVAR.wait(MUTEX.lock().unwrap());
-                    DONE.store(false, Ordering::Relaxed);
+                if DONE.compare_and_swap(true, false, Ordering::Relaxed) {
+                    user_handler();
                 }
-                user_handler();
+                ::std::thread::sleep(std::time::Duration::from_millis(10));
             }
         });
     }
