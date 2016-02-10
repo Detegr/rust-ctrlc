@@ -13,12 +13,3 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 libc = "0.2"
 winapi = "0.2"
 kernel32-sys = "0.2"
-
-[dependencies.lazy_static]
-version = "0.1"
-optional = true
-
-[features]
-default = ["stable"]
-nightly = []
-stable = ["lazy_static"]
