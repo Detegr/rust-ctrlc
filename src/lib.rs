@@ -7,7 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-//! A simple easy to use wrapper around Ctrl-C signal.
+//! A simple easy to use wrapper around Ctrl-C / SIGTERM signal.
 
 #![cfg_attr(feature="nightly", feature(static_condvar))]
 #![cfg_attr(feature="nightly", feature(static_mutex))]
@@ -44,6 +44,7 @@ mod platform {
     use self::libc::c_int;
     use self::libc::sighandler_t;
     use self::libc::SIGINT;
+    use self::libc::SIGTERM;
     use self::libc::signal;
     use std::sync::atomic::Ordering;
 
@@ -55,6 +56,7 @@ mod platform {
     #[inline]
     pub unsafe fn set_os_handler(handler: fn(c_int)) {
         signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler));
+        signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler));
     }
 }
 #[cfg(windows)]
