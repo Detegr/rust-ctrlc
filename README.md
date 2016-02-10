@@ -3,6 +3,8 @@
 
 A simple easy to use wrapper around Ctrl-C signal.
 
+[Documentation](http://detegr.github.io/doc/ctrlc/)
+
 ## Example usage
 ```rust
 extern crate ctrlc;
