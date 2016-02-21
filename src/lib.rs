@@ -46,7 +46,6 @@ mod platform {
     use self::libc::signal;
     use std::sync::atomic::Ordering;
 
-    #[repr(C)]
     pub fn handler(_: c_int) {
         super::features::DONE.store(true, Ordering::Relaxed);
     }
