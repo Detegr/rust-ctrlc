@@ -1,11 +1,12 @@
 [package]
 
 name = "ctrlc"
-version = "1.0.1"
+version = "1.1.1"
 authors = ["Antti Keränen <detegr@gmail.com>"]
 license = "MIT/Apache-2.0"
 keywords = ["ctrlc", "signal", "SIGINT"]
 description = "Easy Ctrl-C handler for Rust projects"
+documentation = "http://detegr.github.io/doc/ctrlc"
 homepage = "https://github.com/Detegr/rust-ctrlc"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 
@@ -13,12 +14,3 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 libc = "0.2"
 winapi = "0.2"
 kernel32-sys = "0.2"
-
-[dependencies.lazy_static]
-version = "0.1"
-optional = true
-
-[features]
-default = ["stable"]
-nightly = []
-stable = ["lazy_static"]
