@@ -13,8 +13,7 @@
 // though you have set up Ctrl-C handler of your own.
 
 extern crate ctrlc;
-use ctrlc::CtrlC;
 fn main() {
-    CtrlC::set_handler(|| println!("Hello world!"));
+    ctrlc::set_handler(|| println!("Hello world!"));
     loop {}
 }
