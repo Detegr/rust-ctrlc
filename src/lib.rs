@@ -30,11 +30,8 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time;
 
-mod features {
-    use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
-    pub static DONE: AtomicBool = ATOMIC_BOOL_INIT;
-}
-use self::features::*;
+use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
+static DONE: AtomicBool = ATOMIC_BOOL_INIT;
 
 #[cfg(unix)]
 mod platform {
@@ -42,12 +39,25 @@ mod platform {
     use self::libc::c_int;
     use self::libc::sighandler_t;
     use self::libc::SIGINT;
+
+    #[cfg(feature = "termination")]
+    use self::libc::SIGTERM;
+
     use self::libc::signal;
     use std::sync::atomic::Ordering;
 
     pub fn handler(_: c_int) {
-        super::features::DONE.store(true, Ordering::Relaxed);
+        super::DONE.store(true, Ordering::Relaxed);
     }
+
+    #[cfg(feature = "termination")]
+    #[inline]
+    pub unsafe fn set_os_handler(handler: fn(c_int)) {
+        signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler));
+        signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler));
+    }
+
+    #[cfg(not(feature = "termination"))]
     #[inline]
     pub unsafe fn set_os_handler(handler: fn(c_int)) {
         signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler));
@@ -62,7 +72,7 @@ mod platform {
     use std::sync::atomic::Ordering;
 
     pub unsafe extern "system" fn handler(_: DWORD) -> BOOL {
-        super::features::DONE.store(true, Ordering::Relaxed);
+        super::DONE.store(true, Ordering::Relaxed);
         TRUE
     }
     #[inline]
