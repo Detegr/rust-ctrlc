@@ -26,63 +26,122 @@
 //! }
 //! ```
 
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::thread;
-use std::time;
 
-use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
-static DONE: AtomicBool = ATOMIC_BOOL_INIT;
+static INIT: AtomicBool = ATOMIC_BOOL_INIT;
 
 #[cfg(unix)]
 mod platform {
     extern crate libc;
+
     use self::libc::c_int;
-    use self::libc::sighandler_t;
-    use self::libc::SIGINT;
+    use self::libc::{signal, sighandler_t, SIGINT, SIG_ERR, EINTR};
+    use self::libc::{sem_t, sem_init, sem_wait, sem_post};
 
     #[cfg(feature = "termination")]
     use self::libc::SIGTERM;
 
-    use self::libc::signal;
-    use std::sync::atomic::Ordering;
+    static mut SEMAPHORE: *mut sem_t = 0 as *mut sem_t;
 
-    pub fn handler(_: c_int) {
-        super::DONE.store(true, Ordering::Relaxed);
+    extern {
+        #[cfg_attr(any(target_os = "macos",
+                       target_os = "ios",
+                       target_os = "freebsd"),
+                   link_name = "__error")]
+        #[cfg_attr(target_os = "dragonfly",
+                   link_name = "__dfly_error")]
+        #[cfg_attr(any(target_os = "openbsd",
+                       target_os = "bitrig",
+                       target_os = "android"),
+                   link_name = "__errno")]
+        #[cfg_attr(target_os = "linux",
+                   link_name = "__errno_location")]
+        fn errno_location() -> *mut c_int;
+    }
+
+    unsafe fn os_handler(_: c_int) {
+        // sem_post() is async-signal-safe. It will only fail
+        // when the semaphore counter has reached its maximum value or
+        // if the semaphore is invalid, we can therefore safely
+        // ignore return value.
+        sem_post(SEMAPHORE);
     }
 
     #[cfg(feature = "termination")]
     #[inline]
-    pub unsafe fn set_os_handler(handler: fn(c_int)) {
-        signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler));
-        signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler));
+    unsafe fn set_os_handler(handler: unsafe fn(c_int)) {
+        assert_ne!(signal(SIGINT,  ::std::mem::transmute::<_, sighandler_t>(handler)), SIG_ERR);
+        assert_ne!(signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler)), SIG_ERR);
     }
 
     #[cfg(not(feature = "termination"))]
     #[inline]
-    pub unsafe fn set_os_handler(handler: fn(c_int)) {
-        signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler));
+    unsafe fn set_os_handler(handler: unsafe fn(c_int)) {
+        assert_ne!(signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)), SIG_ERR);
+    }
+
+    /// Register os signal handler, must be called before calling block_ctrl_c().
+    /// Should only be called once.
+    #[inline]
+    pub unsafe fn init_os_handler() {
+        SEMAPHORE = Box::into_raw(Box::new(::std::mem::uninitialized::<sem_t>()));
+        assert_ne!(sem_init(SEMAPHORE, 0, 0), -1);
+        set_os_handler(os_handler);
+    }
+
+    /// Blocks until a Ctrl-C signal is received.
+    #[inline]
+    pub unsafe fn block_ctrl_c() {
+        loop {
+            if sem_wait(SEMAPHORE) == 0 {
+                break;
+            } else {
+                // Retry if errno is EINTR
+                assert_eq!(*errno_location(), EINTR);
+            }
+        }
     }
 }
+
 #[cfg(windows)]
 mod platform {
     extern crate winapi;
     extern crate kernel32;
-    use self::kernel32::SetConsoleCtrlHandler;
-    use self::winapi::{BOOL, DWORD, TRUE};
-    use std::sync::atomic::Ordering;
 
-    pub unsafe extern "system" fn handler(_: DWORD) -> BOOL {
-        super::DONE.store(true, Ordering::Relaxed);
+    use self::kernel32::{SetConsoleCtrlHandler, CreateSemaphoreA, ReleaseSemaphore, WaitForSingleObject};
+    use self::winapi::{HANDLE, BOOL, DWORD, TRUE, FALSE, INFINITE, WAIT_OBJECT_0, c_long};
+
+    use std::ptr;
+
+    const MAX_SEM_COUNT: c_long = 255;
+    static mut SEMAPHORE: HANDLE = 0 as HANDLE;
+
+    unsafe extern "system" fn os_handler(_: DWORD) -> BOOL {
+        // ReleaseSemaphore() should only fail when the semaphore
+        // counter has reached its maximum value or if the semaphore
+        // is invalid, we can therefore safely ignore return value.
+        ReleaseSemaphore(SEMAPHORE, 1, ptr::null_mut());
         TRUE
     }
+
+    /// Register os signal handler, must be called before calling block_ctrl_c().
+    /// Should only be called once.
     #[inline]
-    pub unsafe fn set_os_handler(handler: unsafe extern "system" fn(DWORD) -> BOOL) {
-        SetConsoleCtrlHandler(Some(handler), TRUE);
+    pub unsafe fn init_os_handler() {
+        SEMAPHORE = CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
+        assert!(!SEMAPHORE.is_null());
+        assert_ne!(SetConsoleCtrlHandler(Some(os_handler), TRUE), FALSE);
+    }
+
+    /// Blocks until a Ctrl-C signal is received.
+    #[inline]
+    pub unsafe fn block_ctrl_c() {
+        assert_eq!(WaitForSingleObject(SEMAPHORE, INFINITE), WAIT_OBJECT_0);
     }
 }
-use self::platform::*;
 
-/// Sets up the signal handler for Ctrl-C using default polling rate of 100ms.
+/// Sets up the signal handler for Ctrl-C.
 /// # Example
 /// ```
 /// ctrlc::set_handler(|| println!("Hello world!"));
@@ -90,36 +149,18 @@ use self::platform::*;
 pub fn set_handler<F>(user_handler: F)
     where F: Fn() -> () + 'static + Send
 {
-    self::set_handler_with_polling_rate(user_handler, time::Duration::from_millis(100));
-}
+    assert!(INIT.swap(true, Ordering::SeqCst) == false, "Ctrl-C signal handler already registered");
 
-/// Sets up the signal handler for Ctrl-C using a custom polling rate.
-/// The polling rate is the amount of time the internal spinloop of CtrlC sleeps between
-/// iterations. Because condition variables are not safe to use inside a signal handler,
-/// CtrlC (from version 1.1.0) uses a spinloop and an atomic boolean instead.
-///
-/// Normally you should use `set_handler` instead, but if the default rate of  100 milliseconds
-/// is too fast or too slow for you, you can use this routine instead to set your own.
-/// # Example
-/// ```
-/// # use std::time::Duration;
-/// ctrlc::set_handler_with_polling_rate(
-///     || println!("Hello world!"),
-///     Duration::from_millis(10)
-/// );
-/// ```
-pub fn set_handler_with_polling_rate<F>(user_handler: F, polling_rate: time::Duration)
-    where F: Fn() -> () + 'static + Send
-{
     unsafe {
-        set_os_handler(handler);
+        platform::init_os_handler();
     }
+
     thread::spawn(move || {
         loop {
-            if DONE.compare_and_swap(true, false, Ordering::Relaxed) {
-                user_handler();
+            unsafe {
+                platform::block_ctrl_c();
             }
-            thread::sleep(polling_rate);
+            user_handler();
         }
     });
 }
