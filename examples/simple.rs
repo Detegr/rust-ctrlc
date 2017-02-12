@@ -14,6 +14,6 @@
 
 extern crate ctrlc;
 fn main() {
-    ctrlc::set_handler(|| println!("Hello world!"));
+    ctrlc::set_handler(|| println!("Hello world!")).expect("Error setting Ctrl-C handler");
     loop {}
 }

@@ -19,7 +19,7 @@
 //!     let r = running.clone();
 //!     ctrlc::set_handler(move || {
 //!         r.store(false, Ordering::SeqCst);
-//!     });
+//!     }).expect("Error setting Ctrl-C handler");
 //!     println!("Waiting for Ctrl-C...");
 //!     while running.load(Ordering::SeqCst) {}
 //!     println!("Got it! Exiting...");
@@ -31,10 +31,18 @@ use std::thread;
 
 static INIT: AtomicBool = ATOMIC_BOOL_INIT;
 
+#[derive(Debug)]
+pub enum Error {
+    Init(String),
+    MultipleHandlers(String),
+    SetHandler,
+}
+
 #[cfg(unix)]
 mod platform {
     extern crate libc;
 
+    use ::Error;
     use self::libc::c_int;
     use self::libc::{signal, sighandler_t, SIGINT, SIG_ERR, EINTR};
     use self::libc::{sem_t, sem_init, sem_wait, sem_post};
@@ -44,7 +52,7 @@ mod platform {
 
     static mut SEMAPHORE: *mut sem_t = 0 as *mut sem_t;
 
-    extern {
+    extern "C" {
         #[cfg_attr(any(target_os = "macos",
                        target_os = "ios",
                        target_os = "freebsd"),
@@ -70,24 +78,34 @@ mod platform {
 
     #[cfg(feature = "termination")]
     #[inline]
-    unsafe fn set_os_handler(handler: unsafe fn(c_int)) {
-        assert_ne!(signal(SIGINT,  ::std::mem::transmute::<_, sighandler_t>(handler)), SIG_ERR);
-        assert_ne!(signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler)), SIG_ERR);
+    unsafe fn set_os_handler(handler: unsafe fn(c_int)) -> Result<(), Error> {
+        if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
+            return Err(Error::SetHandler);
+        }
+        if signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
+            return Err(Error::SetHandler);
+        }
+        Ok(())
     }
 
     #[cfg(not(feature = "termination"))]
     #[inline]
-    unsafe fn set_os_handler(handler: unsafe fn(c_int)) {
-        assert_ne!(signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)), SIG_ERR);
+    unsafe fn set_os_handler(handler: unsafe fn(c_int)) -> Result<(), Error> {
+        if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
+            return Err(Error::SetHandler);
+        }
+        Ok(())
     }
 
     /// Register os signal handler, must be called before calling block_ctrl_c().
     /// Should only be called once.
     #[inline]
-    pub unsafe fn init_os_handler() {
+    pub unsafe fn init_os_handler() -> Result<(), Error> {
         SEMAPHORE = Box::into_raw(Box::new(::std::mem::uninitialized::<sem_t>()));
-        assert_ne!(sem_init(SEMAPHORE, 0, 0), -1);
-        set_os_handler(os_handler);
+        if sem_init(SEMAPHORE, 0, 0) == -1 {
+            return Err(Error::Init("sem_init failed".into()));
+        }
+        set_os_handler(os_handler)
     }
 
     /// Blocks until a Ctrl-C signal is received.
@@ -98,6 +116,8 @@ mod platform {
                 break;
             } else {
                 // Retry if errno is EINTR
+                // EINVAL should not be possible as we check that sem_init
+                // succeeds before getting here
                 assert_eq!(*errno_location(), EINTR);
             }
         }
@@ -109,7 +129,9 @@ mod platform {
     extern crate winapi;
     extern crate kernel32;
 
-    use self::kernel32::{SetConsoleCtrlHandler, CreateSemaphoreA, ReleaseSemaphore, WaitForSingleObject};
+    use ::Error;
+    use self::kernel32::{SetConsoleCtrlHandler, CreateSemaphoreA, ReleaseSemaphore,
+                         WaitForSingleObject};
     use self::winapi::{HANDLE, BOOL, DWORD, TRUE, FALSE, INFINITE, WAIT_OBJECT_0, c_long};
 
     use std::ptr;
@@ -128,10 +150,15 @@ mod platform {
     /// Register os signal handler, must be called before calling block_ctrl_c().
     /// Should only be called once.
     #[inline]
-    pub unsafe fn init_os_handler() {
+    pub unsafe fn init_os_handler() -> Result<(), Error> {
         SEMAPHORE = CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
-        assert!(!SEMAPHORE.is_null());
-        assert_ne!(SetConsoleCtrlHandler(Some(os_handler), TRUE), FALSE);
+        if SEMAPHORE.is_null() {
+            return Err(Error::Init("CreateSemaphoreA failed".into()));
+        }
+        if SetConsoleCtrlHandler(Some(os_handler), TRUE) == FALSE {
+            return Err(Error::SetHandler);
+        }
+        Ok(())
     }
 
     /// Blocks until a Ctrl-C signal is received.
@@ -144,15 +171,17 @@ mod platform {
 /// Sets up the signal handler for Ctrl-C.
 /// # Example
 /// ```
-/// ctrlc::set_handler(|| println!("Hello world!"));
+/// ctrlc::set_handler(|| println!("Hello world!")).expect("Error setting Ctrl-C handler");
 /// ```
-pub fn set_handler<F>(user_handler: F)
+pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
     where F: Fn() -> () + 'static + Send
 {
-    assert!(INIT.swap(true, Ordering::SeqCst) == false, "Ctrl-C signal handler already registered");
+    if INIT.swap(true, Ordering::SeqCst) != false {
+        return Err(Error::MultipleHandlers("Ctrl-C signal handler already registered".into()));
+    }
 
     unsafe {
-        platform::init_os_handler();
+        try!(platform::init_os_handler());
     }
 
     thread::spawn(move || {
@@ -163,4 +192,6 @@ pub fn set_handler<F>(user_handler: F)
             user_handler();
         }
     });
+
+    Ok(())
 }
