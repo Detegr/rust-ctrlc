@@ -16,7 +16,7 @@ fn main() {
     let r = running.clone();
     ctrlc::set_handler(move || {
         r.store(false, Ordering::SeqCst);
-    });
+    }).expect("Error setting Ctrl-C handler");
     println!("Waiting for Ctrl-C...");
     while running.load(Ordering::SeqCst) {}
     println!("Got it! Exiting...");
@@ -30,7 +30,7 @@ fn main() {
 Add CtrlC to Cargo.toml using `termination` feature and CtrlC will handle both SIGINT and SIGTERM.
 ```
 [dependencies]
-ctrlc = { version = "2.0", features = ["termination"] }
+ctrlc = { version = "3.0", features = ["termination"] }
 ```
 
 ## License
