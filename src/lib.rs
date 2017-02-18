@@ -45,12 +45,15 @@ mod platform {
     use ::Error;
     use self::libc::c_int;
     use self::libc::{signal, sighandler_t, SIGINT, SIG_ERR, EINTR};
-    use self::libc::{sem_t, sem_init, sem_wait, sem_post};
+
+    type PipeReadEnd = i32;
+    type PipeWriteEnd = i32;
+    pub static mut PIPE_FDS: (PipeReadEnd, PipeWriteEnd) = (-1, -1);
+
+    pub use self::libc::{c_void, fcntl, FD_CLOEXEC, F_SETFD, pipe, read, write};
 
     #[cfg(feature = "termination")]
     use self::libc::SIGTERM;
-
-    static mut SEMAPHORE: *mut sem_t = 0 as *mut sem_t;
 
     extern "C" {
         #[cfg_attr(any(target_os = "macos",
@@ -69,11 +72,8 @@ mod platform {
     }
 
     unsafe fn os_handler(_: c_int) {
-        // sem_post() is async-signal-safe. It will only fail
-        // when the semaphore counter has reached its maximum value or
-        // if the semaphore is invalid, we can therefore safely
-        // ignore return value.
-        sem_post(SEMAPHORE);
+        // Assuming this always succeeds. Can't really handle errors in any meaningful way.
+        write(PIPE_FDS.1, &mut 0u8 as *mut _ as *mut c_void, 1);
     }
 
     #[cfg(feature = "termination")]
@@ -97,13 +97,21 @@ mod platform {
         Ok(())
     }
 
-    /// Register os signal handler, must be called before calling block_ctrl_c().
+    /// Register os signal handler, must be called before calling `block_ctrl_c()`.
     /// Should only be called once.
     #[inline]
     pub unsafe fn init_os_handler() -> Result<(), Error> {
-        SEMAPHORE = Box::into_raw(Box::new(::std::mem::uninitialized::<sem_t>()));
-        if sem_init(SEMAPHORE, 0, 0) == -1 {
-            return Err(Error::Init("sem_init failed".into()));
+        let mut fds = [0i32, 0];
+        let pipe_fds = fds.as_mut_ptr();
+        if pipe(pipe_fds) == -1 {
+            return Err(Error::Init(format!("pipe failed with error {}", *errno_location())));
+        }
+        PIPE_FDS = (*pipe_fds.offset(0), *pipe_fds.offset(1));
+        if fcntl(PIPE_FDS.0, F_SETFD, FD_CLOEXEC) == -1 {
+            return Err(Error::Init(format!("fcntl failed with error {}", *errno_location())));
+        }
+        if fcntl(PIPE_FDS.1, F_SETFD, FD_CLOEXEC) == -1 {
+            return Err(Error::Init(format!("fcntl failed with error {}", *errno_location())));
         }
         set_os_handler(os_handler)
     }
@@ -111,14 +119,12 @@ mod platform {
     /// Blocks until a Ctrl-C signal is received.
     #[inline]
     pub unsafe fn block_ctrl_c() {
+        let mut buf = 0u8;
         loop {
-            if sem_wait(SEMAPHORE) == 0 {
-                break;
-            } else {
-                // Retry if errno is EINTR
-                // EINVAL should not be possible as we check that sem_init
-                // succeeds before getting here
+            if read(PIPE_FDS.0, &mut buf as *mut _ as *mut c_void, 1) == -1 {
                 assert_eq!(*errno_location(), EINTR);
+            } else {
+                break;
             }
         }
     }
