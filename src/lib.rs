@@ -201,3 +201,9 @@ pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
 
     Ok(())
 }
+
+#[test]
+fn test_multiple_handlers() {
+    assert!(set_handler(|| {}).is_ok());
+    assert!(set_handler(|| {}).is_err());
+}
