@@ -71,14 +71,14 @@ mod platform {
         fn errno_location() -> *mut c_int;
     }
 
-    unsafe fn os_handler(_: c_int) {
+    unsafe extern "C" fn os_handler(_: c_int) {
         // Assuming this always succeeds. Can't really handle errors in any meaningful way.
         write(PIPE_FDS.1, &mut 0u8 as *mut _ as *mut c_void, 1);
     }
 
     #[cfg(feature = "termination")]
     #[inline]
-    unsafe fn set_os_handler(handler: unsafe fn(c_int)) -> Result<(), Error> {
+    unsafe fn set_os_handler(handler: unsafe extern "C" fn(c_int)) -> Result<(), Error> {
         if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
             return Err(Error::SetHandler);
         }
@@ -90,7 +90,7 @@ mod platform {
 
     #[cfg(not(feature = "termination"))]
     #[inline]
-    unsafe fn set_os_handler(handler: unsafe fn(c_int)) -> Result<(), Error> {
+    unsafe fn set_os_handler(handler: unsafe extern "C" fn(c_int)) -> Result<(), Error> {
         if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
             return Err(Error::SetHandler);
         }
