@@ -26,6 +26,8 @@
 //! }
 //! ```
 
+use std::error::Error as StdError;
+use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::thread;
 
@@ -36,6 +38,22 @@ pub enum Error {
     Init(String),
     MultipleHandlers(String),
     SetHandler,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CtrlC Error: {}", self.description())
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Init(ref msg) => &msg,
+            Error::MultipleHandlers(ref msg) => &msg,
+            Error::SetHandler => "Error setting handler"
+        }
+}
 }
 
 #[cfg(unix)]
