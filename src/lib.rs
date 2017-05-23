@@ -26,7 +26,6 @@
 //! }
 //! ```
 
-use std::error::Error as StdError;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::thread;
@@ -42,6 +41,8 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use std::error::Error;
+        
         write!(f, "CtrlC Error: {}", self.description())
     }
 }
