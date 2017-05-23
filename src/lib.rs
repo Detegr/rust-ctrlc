@@ -46,7 +46,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl StdError for Error {
+impl std::error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::Init(ref msg) => &msg,
