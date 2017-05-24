@@ -132,6 +132,16 @@ mod platform {
     /// Blocks until a Ctrl-C signal is received.
     #[inline]
     pub unsafe fn block_ctrl_c() {
+        // block the signals so it reliably delivers to other threads
+        {
+            let mut sigset = ::std::mem::uninitialized::<libc::sigset_t>();
+            libc::sigemptyset(&mut sigset);
+            libc::sigaddset(&mut sigset, libc::SIGINT);
+            #[cfg(feature = "termination")]
+            libc::sigaddset(&mut sigset, libc::SIGTERM);
+            libc::pthread_sigmask(libc::SIG_BLOCK, &sigset, ::std::ptr::null_mut());
+        }
+
         let mut buf = 0u8;
         loop {
             if read(PIPE_FDS.0, &mut buf as *mut _ as *mut c_void, 1) == -1 {
