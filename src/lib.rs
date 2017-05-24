@@ -43,7 +43,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use std::error::Error;
         
-        write!(f, "CtrlC Error: {}", self.description())
+        write!(f, "CtrlC error: {}", self.description())
     }
 }
 
@@ -54,7 +54,7 @@ impl std::error::Error for Error {
             Error::MultipleHandlers(ref msg) => &msg,
             Error::SetHandler => "Error setting handler"
         }
-}
+    }
 }
 
 #[cfg(unix)]
