@@ -83,7 +83,7 @@ mod platform {
         let act = sigaction {
             sa_sigaction: ::std::mem::transmute::<_, sighandler_t>(handler),
             sa_mask: mask,
-            sa_flags: 0,
+            sa_flags: if cfg!(feature="norestart") { 0 } else { libc::SA_RESTART },
             sa_restorer: None,
         };
         sigaction(sig, &act, ::std::ptr::null_mut())
