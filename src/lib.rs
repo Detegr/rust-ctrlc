@@ -63,7 +63,7 @@ mod platform {
 
     use ::Error;
     use self::libc::c_int;
-    use self::libc::{signal, sighandler_t, SIGINT, SIG_ERR, EINTR};
+    use self::libc::{sigaction, sighandler_t, SIGINT, EINTR};
 
     type PipeReadEnd = i32;
     type PipeWriteEnd = i32;
@@ -95,13 +95,26 @@ mod platform {
         write(PIPE_FDS.1, &mut 0u8 as *mut _ as *mut c_void, 1);
     }
 
+    unsafe fn set_signal_hander(
+        sig: c_int, handler: unsafe extern "C" fn(c_int)) -> c_int {
+        let mut mask = ::std::mem::uninitialized::<libc::sigset_t>();
+        libc::sigemptyset(&mut mask);
+        let act = sigaction {
+            sa_sigaction: ::std::mem::transmute::<_, sighandler_t>(handler),
+            sa_mask: mask,
+            sa_flags: if cfg!(feature="norestart") { 0 } else { libc::SA_RESTART },
+            sa_restorer: None,
+        };
+        sigaction(sig, &act, ::std::ptr::null_mut())
+    }
+
     #[cfg(feature = "termination")]
     #[inline]
     unsafe fn set_os_handler(handler: unsafe extern "C" fn(c_int)) -> Result<(), Error> {
-        if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
+        if set_signal_hander(SIGINT, handler) != 0 {
             return Err(Error::SetHandler);
         }
-        if signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
+        if set_signal_hander(SIGTERM, handler) != 0 {
             return Err(Error::SetHandler);
         }
         Ok(())
@@ -110,7 +123,7 @@ mod platform {
     #[cfg(not(feature = "termination"))]
     #[inline]
     unsafe fn set_os_handler(handler: unsafe extern "C" fn(c_int)) -> Result<(), Error> {
-        if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
+        if set_signal_hander(SIGINT, handler) != 0 {
             return Err(Error::SetHandler);
         }
         Ok(())
@@ -210,6 +223,22 @@ pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
     }
 
     thread::spawn(move || {
+        // block the signals so it reliably delivers to other threads
+        #[cfg(all(feature="norestart",unix))]
+        {
+            extern crate libc;
+            unsafe {
+                let mut sigset = ::std::mem::uninitialized::
+                    <libc::sigset_t>();
+                libc::sigemptyset(&mut sigset);
+                libc::sigaddset(&mut sigset, libc::SIGINT);
+                #[cfg(feature = "termination")]
+                libc::sigaddset(&mut sigset, libc::SIGTERM);
+                libc::pthread_sigmask(
+                    libc::SIG_BLOCK, &sigset, ::std::ptr::null_mut());
+            }
+        }
+
         loop {
             unsafe {
                 platform::block_ctrl_c();

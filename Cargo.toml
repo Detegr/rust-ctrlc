@@ -17,3 +17,4 @@ kernel32-sys = "0.2"
 
 [features]
 termination = []
+norestart = []
