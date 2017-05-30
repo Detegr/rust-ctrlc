@@ -7,7 +7,20 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-//! A simple easy to use wrapper around Ctrl-C.
+#![warn(missing_docs)]
+
+//! Cross platform handling of Ctrl-C signals.
+//!
+//! [HandlerRoutine]:https://msdn.microsoft.com/en-us/library/windows/desktop/ms683242.aspx
+//!
+//! [set_handler()](fn.set_handler.html) allows setting a handler closure which is executed on
+//! `Ctrl+C`. On Unix, this corresponds to a `SIGINT` signal. On windows, `Ctrl+C` corresponds to
+//! [`CTRL_C_EVENT`][HandlerRoutine] or [`CTRL_BREAK_EVENT`][HandlerRoutine].
+//!
+//! Setting a handler will start a new dedicated signal handling thread where we
+//! execute the handler each time we receive a `Ctrl+C` signal. There can only be
+//! one handler, you would typically set one at the start of your program.
+//!
 //! # Example
 //! ```no_run
 //! extern crate ctrlc;
@@ -17,14 +30,21 @@
 //! fn main() {
 //!     let running = Arc::new(AtomicBool::new(true));
 //!     let r = running.clone();
+//!
 //!     ctrlc::set_handler(move || {
 //!         r.store(false, Ordering::SeqCst);
 //!     }).expect("Error setting Ctrl-C handler");
+//!
 //!     println!("Waiting for Ctrl-C...");
 //!     while running.load(Ordering::SeqCst) {}
 //!     println!("Got it! Exiting...");
 //! }
 //! ```
+//!
+//! # Handling SIGTERM
+//! Handling of `SIGTERM` can be enabled with `termination` feature. If this is enabled,
+//! the handler specified by `set_handler()` will be executed for both `SIGINT` and `SIGTERM`.
+//!
 
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
@@ -32,120 +52,136 @@ use std::thread;
 
 static INIT: AtomicBool = ATOMIC_BOOL_INIT;
 
+/// Ctrl-C error.
 #[derive(Debug)]
 pub enum Error {
-    Init(String),
-    MultipleHandlers(String),
-    SetHandler,
+    /// Ctrl-C signal handler already registered.
+    MultipleHandlers,
+    /// Unexpected system error.
+    System(std::io::Error),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use std::error::Error;
-        
-        write!(f, "CtrlC error: {}", self.description())
+        write!(f, "Ctrl-C error: {}", self.description())
     }
 }
 
 impl std::error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::Init(ref msg) => &msg,
-            Error::MultipleHandlers(ref msg) => &msg,
-            Error::SetHandler => "Error setting handler"
+            Error::MultipleHandlers => "Ctrl-C signal handler already registered",
+            Error::System(_) => "Unexpected system error",
+        }
+    }
+
+    fn cause(&self) -> Option<&std::error::Error> {
+        match *self {
+            Error::System(ref e) => Some(e),
+            _ => None,
         }
     }
 }
 
 #[cfg(unix)]
 mod platform {
-    extern crate libc;
+    extern crate nix;
 
-    use ::Error;
-    use self::libc::c_int;
-    use self::libc::{signal, sighandler_t, SIGINT, SIG_ERR, EINTR};
+    use super::Error;
+    use self::nix::unistd;
+    use std::os::unix::io::RawFd;
+    use std::io;
 
-    type PipeReadEnd = i32;
-    type PipeWriteEnd = i32;
-    pub static mut PIPE_FDS: (PipeReadEnd, PipeWriteEnd) = (-1, -1);
+    static mut PIPE: (RawFd, RawFd) = (-1, -1);
 
-    pub use self::libc::{c_void, fcntl, FD_CLOEXEC, F_SETFD, pipe, read, write};
-
-    #[cfg(feature = "termination")]
-    use self::libc::SIGTERM;
-
-    extern "C" {
-        #[cfg_attr(any(target_os = "macos",
-                       target_os = "ios",
-                       target_os = "freebsd"),
-                   link_name = "__error")]
-        #[cfg_attr(target_os = "dragonfly",
-                   link_name = "__dfly_error")]
-        #[cfg_attr(any(target_os = "openbsd",
-                       target_os = "bitrig",
-                       target_os = "android"),
-                   link_name = "__errno")]
-        #[cfg_attr(target_os = "linux",
-                   link_name = "__errno_location")]
-        fn errno_location() -> *mut c_int;
-    }
-
-    unsafe extern "C" fn os_handler(_: c_int) {
+    extern fn os_handler(_: nix::c_int) {
         // Assuming this always succeeds. Can't really handle errors in any meaningful way.
-        write(PIPE_FDS.1, &mut 0u8 as *mut _ as *mut c_void, 1);
+        unsafe {
+            unistd::write(PIPE.1, &[0u8]).is_ok();
+        }
     }
 
-    #[cfg(feature = "termination")]
-    #[inline]
-    unsafe fn set_os_handler(handler: unsafe extern "C" fn(c_int)) -> Result<(), Error> {
-        if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
-            return Err(Error::SetHandler);
-        }
-        if signal(SIGTERM, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
-            return Err(Error::SetHandler);
-        }
-        Ok(())
-    }
-
-    #[cfg(not(feature = "termination"))]
-    #[inline]
-    unsafe fn set_os_handler(handler: unsafe extern "C" fn(c_int)) -> Result<(), Error> {
-        if signal(SIGINT, ::std::mem::transmute::<_, sighandler_t>(handler)) == SIG_ERR {
-            return Err(Error::SetHandler);
-        }
-        Ok(())
-    }
-
-    /// Register os signal handler, must be called before calling `block_ctrl_c()`.
-    /// Should only be called once.
+    /// Register os signal handler.
+    ///
+    /// Must be called before calling [`block_ctrl_c()`](fn.block_ctrl_c.html)
+    /// and should only be called once.
+    ///
+    /// # Errors
+    /// Will return an error if a system error occurred.
+    ///
     #[inline]
     pub unsafe fn init_os_handler() -> Result<(), Error> {
-        let mut fds = [0i32, 0];
-        let pipe_fds = fds.as_mut_ptr();
-        if pipe(pipe_fds) == -1 {
-            return Err(Error::Init(format!("pipe failed with error {}", *errno_location())));
+        use self::nix::fcntl;
+        use self::nix::sys::signal;
+
+        PIPE = unistd::pipe2(fcntl::O_CLOEXEC).map_err(|e| Error::System(e.into()))?;
+
+        let close_pipe = |e: nix::Error| -> Error {
+            unistd::close(PIPE.1).is_ok();
+            unistd::close(PIPE.0).is_ok();
+            Error::System(e.into())
+        };
+
+        // Make sure we never block on write in the os handler.
+        if let Err(e) = fcntl::fcntl(PIPE.1, fcntl::FcntlArg::F_SETFL(fcntl::O_NONBLOCK)) {
+            return Err(close_pipe(e));
         }
-        PIPE_FDS = (*pipe_fds.offset(0), *pipe_fds.offset(1));
-        if fcntl(PIPE_FDS.0, F_SETFD, FD_CLOEXEC) == -1 {
-            return Err(Error::Init(format!("fcntl failed with error {}", *errno_location())));
+
+        let handler = signal::SigHandler::Handler(os_handler);
+        let new_action = signal::SigAction::new(handler,
+            signal::SA_RESTART,
+            signal::SigSet::empty()
+        );
+
+        let _old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
+            Ok(old) => old,
+            Err(e) => return Err(close_pipe(e)),
+        };
+
+        #[cfg(feature = "termination")]
+        match signal::sigaction(signal::Signal::SIGTERM, &new_action) {
+            Ok(_) => {},
+            Err(e) => {
+                signal::sigaction(signal::Signal::SIGINT, &_old).unwrap();
+                return Err(close_pipe(e));
+            },
         }
-        if fcntl(PIPE_FDS.1, F_SETFD, FD_CLOEXEC) == -1 {
-            return Err(Error::Init(format!("fcntl failed with error {}", *errno_location())));
-        }
-        set_os_handler(os_handler)
+
+        // TODO: Maybe throw an error if old action is not SigDfl.
+
+        Ok(())
     }
 
     /// Blocks until a Ctrl-C signal is received.
+    ///
+    /// Must be called after calling [`init_os_handler()`](fn.init_os_handler.html).
+    ///
+    /// # Errors
+    /// Will return an error if a system error occurred.
+    ///
     #[inline]
-    pub unsafe fn block_ctrl_c() {
-        let mut buf = 0u8;
+    pub unsafe fn block_ctrl_c() -> Result<(), Error> {
+        let mut buf = [0u8];
+
+        // TODO: Can we safely convert the pipe fd into a std::io::Read
+        // with std::os::unix::io::FromRawFd, this would handle EINTR
+        // and everything for us.
         loop {
-            if read(PIPE_FDS.0, &mut buf as *mut _ as *mut c_void, 1) == -1 {
-                assert_eq!(*errno_location(), EINTR);
-            } else {
-                break;
+            match unistd::read(PIPE.0, &mut buf[..]) {
+                Ok(1) => break,
+                Ok(_) => return Err(Error::System(io::ErrorKind::UnexpectedEof.into()).into()),
+                Err(nix::Error::Sys(nix::Errno::EINTR)) => {},
+                Err(e) => return Err(Error::System(e.into())),
             }
         }
+
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn raise_ctrl_c() {
+        signal::raise(signal::Signal::SIGINT).unwrap();
     }
 }
 
@@ -154,65 +190,122 @@ mod platform {
     extern crate winapi;
     extern crate kernel32;
 
-    use ::Error;
-    use self::kernel32::{SetConsoleCtrlHandler, CreateSemaphoreA, ReleaseSemaphore,
-                         WaitForSingleObject};
-    use self::winapi::{HANDLE, BOOL, DWORD, TRUE, FALSE, INFINITE, WAIT_OBJECT_0, c_long};
-
+    use super::Error;
+    use self::winapi::{HANDLE, BOOL, DWORD, TRUE, FALSE, c_long};
     use std::ptr;
+    use std::io;
 
     const MAX_SEM_COUNT: c_long = 255;
     static mut SEMAPHORE: HANDLE = 0 as HANDLE;
 
     unsafe extern "system" fn os_handler(_: DWORD) -> BOOL {
-        // ReleaseSemaphore() should only fail when the semaphore
-        // counter has reached its maximum value or if the semaphore
-        // is invalid, we can therefore safely ignore return value.
-        ReleaseSemaphore(SEMAPHORE, 1, ptr::null_mut());
+        // Assuming this always succeeds. Can't really handle errors in any meaningful way.
+        kernel32::ReleaseSemaphore(SEMAPHORE, 1, ptr::null_mut());
         TRUE
     }
 
-    /// Register os signal handler, must be called before calling block_ctrl_c().
-    /// Should only be called once.
+    /// Register os signal handler.
+    ///
+    /// Must be called before calling [`block_ctrl_c()`](fn.block_ctrl_c.html)
+    /// and should only be called once.
+    ///
+    /// # Errors
+    /// Will return an error if a system error occurred.
+    ///
     #[inline]
     pub unsafe fn init_os_handler() -> Result<(), Error> {
-        SEMAPHORE = CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
+        SEMAPHORE = kernel32::CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
         if SEMAPHORE.is_null() {
-            return Err(Error::Init("CreateSemaphoreA failed".into()));
+            return Err(Error::System(io::Error::last_os_error()));
         }
-        if SetConsoleCtrlHandler(Some(os_handler), TRUE) == FALSE {
-            return Err(Error::SetHandler);
+
+        if kernel32::SetConsoleCtrlHandler(Some(os_handler), TRUE) == FALSE {
+            let e = io::Error::last_os_error();
+            kernel32::CloseHandle(SEMAPHORE);
+            SEMAPHORE = 0 as HANDLE;
+            return Err(Error::System(e));
         }
+
         Ok(())
     }
 
     /// Blocks until a Ctrl-C signal is received.
+    ///
+    /// Must be called after calling [`init_os_handler()`](fn.init_os_handler.html).
+    ///
+    /// # Errors
+    /// Will return an error if a system error occurred.
+    ///
     #[inline]
-    pub unsafe fn block_ctrl_c() {
-        assert_eq!(WaitForSingleObject(SEMAPHORE, INFINITE), WAIT_OBJECT_0);
+    pub unsafe fn block_ctrl_c() -> Result<(), Error> {
+        use self::winapi::{INFINITE, WAIT_OBJECT_0, WAIT_FAILED};
+
+        match kernel32::WaitForSingleObject(SEMAPHORE, INFINITE) {
+            WAIT_OBJECT_0 => Ok(()),
+            WAIT_FAILED => Err(Error::System(io::Error::last_os_error())),
+            ret => Err(Error::System(io::Error::new(
+                io::ErrorKind::Other,
+                format!("WaitForSingleObject(), unexpected return value \"{:x}\"", ret),
+            ))),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn raise_ctrl_c() {
+        unsafe {
+            // This will signal the whole process group.
+            assert!(kernel32::GenerateConsoleCtrlEvent(winapi::CTRL_C_EVENT, 0) != 0);
+        }
     }
 }
 
-/// Sets up the signal handler for Ctrl-C.
+/// Register signal handler for Ctrl-C.
+///
+/// Starts a new dedicated signal handling thread. Should only be called once,
+/// typically at the start of your program.
+///
 /// # Example
-/// ```
+/// ```no_run
 /// ctrlc::set_handler(|| println!("Hello world!")).expect("Error setting Ctrl-C handler");
 /// ```
+///
+/// # Warning
+/// On Unix, any existing `SIGINT`, `SIGTERM`(if termination feature is enabled) or `SA_SIGINFO`
+/// posix signal handlers will be overwritten. On Windows, multiple handler routines are allowed,
+/// but they are called on a last-registered, first-called basis until the signal is handled.
+///
+/// On Unix, signal dispositions and signal handlers are inherited by child processes created via
+/// `fork(2)` on, but not by child processes created via `execve(2)`.
+/// Signal handlers are not inherited on Windows.
+///
+/// # Errors
+/// Will return an error if another `ctrlc::set_handler()` handler exists or if a
+/// system error occurred while setting the handler.
+///
+/// # Panics
+/// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
+///
 pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
     where F: Fn() -> () + 'static + Send
 {
-    if INIT.swap(true, Ordering::SeqCst) != false {
-        return Err(Error::MultipleHandlers("Ctrl-C signal handler already registered".into()));
+    if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
+        return Err(Error::MultipleHandlers);
     }
 
     unsafe {
-        try!(platform::init_os_handler());
+        match platform::init_os_handler() {
+            Ok(_) => {},
+            err => {
+                INIT.store(false, Ordering::SeqCst);
+                return err;
+            },
+        }
     }
 
     thread::spawn(move || {
         loop {
             unsafe {
-                platform::block_ctrl_c();
+                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
             }
             user_handler();
         }
@@ -221,8 +314,19 @@ pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
     Ok(())
 }
 
-#[test]
-fn test_multiple_handlers() {
-    assert!(set_handler(|| {}).is_ok());
-    assert!(set_handler(|| {}).is_err());
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_set_handler() {
+        let (tx, rx) = ::std::sync::mpsc::channel();
+        super::set_handler(move || {
+            tx.send(true).unwrap();
+        }).unwrap();
+
+        super::platform::raise_ctrl_c();
+
+        rx.recv_timeout(::std::time::Duration::from_secs(1)).unwrap();
+
+        assert!(super::set_handler(|| {}).is_err());
+    }
 }
