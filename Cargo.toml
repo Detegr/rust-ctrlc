@@ -17,3 +17,8 @@ kernel32-sys = "0.2"
 
 [features]
 termination = []
+
+[[test]]
+name = "tests"
+path = "src/tests.rs"
+harness = false

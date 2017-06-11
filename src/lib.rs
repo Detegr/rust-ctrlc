@@ -178,11 +178,6 @@ mod platform {
 
         Ok(())
     }
-
-    #[cfg(test)]
-    pub fn raise_ctrl_c() {
-        signal::raise(signal::Signal::SIGINT).unwrap();
-    }
 }
 
 #[cfg(windows)]
@@ -249,14 +244,6 @@ mod platform {
             ))),
         }
     }
-
-    #[cfg(test)]
-    pub fn raise_ctrl_c() {
-        unsafe {
-            // This will signal the whole process group.
-            assert!(kernel32::GenerateConsoleCtrlEvent(winapi::CTRL_C_EVENT, 0) != 0);
-        }
-    }
 }
 
 /// Register signal handler for Ctrl-C.
@@ -312,21 +299,4 @@ pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
     });
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_set_handler() {
-        let (tx, rx) = ::std::sync::mpsc::channel();
-        super::set_handler(move || {
-            tx.send(true).unwrap();
-        }).unwrap();
-
-        super::platform::raise_ctrl_c();
-
-        rx.recv_timeout(::std::time::Duration::from_secs(1)).unwrap();
-
-        assert!(super::set_handler(|| {}).is_err());
-    }
 }
