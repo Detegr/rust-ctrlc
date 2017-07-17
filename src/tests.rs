@@ -1,4 +1,4 @@
-// Copyright (c) 2015 CtrlC developers
+// Copyright (c) 2017 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -13,7 +13,7 @@ extern crate ctrlc;
 mod platform {
     extern crate nix;
 
-    use ::std::io;
+    use std::io;
 
     pub unsafe fn setup() -> io::Result<()> {
         Ok(())
@@ -59,13 +59,11 @@ mod platform {
                     use self::winapi::winnt::VOID;
 
                     let mut n = 0u32;
-                    if self::kernel32::WriteFile(
-                        handle,
-                        buf.as_ptr() as *const VOID,
-                        buf.len() as DWORD,
-                        &mut n as *mut DWORD,
-                        ptr::null_mut()
-                    ) == 0 {
+                    if self::kernel32::WriteFile(handle,
+                                                 buf.as_ptr() as *const VOID,
+                                                 buf.len() as DWORD,
+                                                 &mut n as *mut DWORD,
+                                                 ptr::null_mut()) == 0 {
                         Err(io::Error::last_os_error())
                     } else {
                         Ok(n as usize)
@@ -133,15 +131,13 @@ mod platform {
         use self::winapi::shlobj::INVALID_HANDLE_VALUE;
         use self::winapi::fileapi::OPEN_EXISTING;
 
-        let stdout = self::kernel32::CreateFileA(
-            "CONOUT$\0".as_ptr() as *const CHAR,
-            GENERIC_READ | GENERIC_WRITE,
-            FILE_SHARE_WRITE,
-            ptr::null_mut(),
-            OPEN_EXISTING,
-            0,
-            ptr::null_mut()
-        );
+        let stdout = self::kernel32::CreateFileA("CONOUT$\0".as_ptr() as *const CHAR,
+                                                 GENERIC_READ | GENERIC_WRITE,
+                                                 FILE_SHARE_WRITE,
+                                                 ptr::null_mut(),
+                                                 OPEN_EXISTING,
+                                                 0,
+                                                 ptr::null_mut());
 
         if stdout.is_null() || stdout == INVALID_HANDLE_VALUE {
             Err(io::Error::last_os_error())
@@ -222,16 +218,17 @@ mod platform {
 
 fn test_set_handler() {
     let (tx, rx) = ::std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        tx.send(true).unwrap();
-    }).unwrap();
+    ctrlc::set_handler(move || { tx.send(true).unwrap(); }).unwrap();
 
-    unsafe { platform::raise_ctrl_c(); }
+    unsafe {
+        platform::raise_ctrl_c();
+    }
 
-    rx.recv_timeout(::std::time::Duration::from_secs(10)).unwrap();
+    rx.recv_timeout(::std::time::Duration::from_secs(10))
+        .unwrap();
 
     match ctrlc::set_handler(|| {}) {
-        Err(ctrlc::Error::MultipleHandlers) => {},
+        Err(ctrlc::Error::MultipleHandlers) => {}
         ret => panic!("{:?}", ret),
     }
 }
@@ -251,15 +248,21 @@ macro_rules! run_tests {
 }
 
 fn main() {
-    unsafe { platform::setup().unwrap(); }
-    
+    unsafe {
+        platform::setup().unwrap();
+    }
+
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        unsafe { platform::cleanup().unwrap(); }
-        (default)(info);
-    }));
+                                      unsafe {
+                                          platform::cleanup().unwrap();
+                                      }
+                                      (default)(info);
+                                  }));
 
     run_tests!(test_set_handler);
 
-    unsafe { platform::cleanup().unwrap(); }
+    unsafe {
+        platform::cleanup().unwrap();
+    }
 }
