@@ -7,16 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-pub mod counter;
+//! This module provides an abstraction over signal handler callbacks using an atomic counter to
+//! tell the user the signal has been received and the handler has been run.
 
-#[cfg(unix)]
-mod unix;
-
-#[cfg(windows)]
-mod windows;
-
-#[cfg(unix)]
-pub use self::unix::*;
-
-#[cfg(windows)]
-pub use self::windows::*;
+pub use platform::counter::*;
