@@ -1,13 +1,22 @@
-use std;
 use std::fmt;
+use std;
 
 /// Ctrl-C error.
 #[derive(Debug)]
 pub enum Error {
+    /// Signal could not be found from the system.
+    NoSuchSignal(::SignalType),
     /// Ctrl-C signal handler already registered.
     MultipleHandlers,
     /// Unexpected system error.
     System(std::io::Error),
+}
+
+impl From<::platform::Error> for Error {
+    fn from(e: ::platform::Error) -> Error {
+        let system_error = std::io::Error::new(std::io::ErrorKind::Other, e);
+        Error::System(system_error)
+    }
 }
 
 impl fmt::Display for Error {
@@ -20,6 +29,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn description(&self) -> &str {
         match *self {
+            Error::NoSuchSignal(_) => "Signal could not be found from the system",
             Error::MultipleHandlers => "Ctrl-C signal handler already registered",
             Error::System(_) => "Unexpected system error",
         }

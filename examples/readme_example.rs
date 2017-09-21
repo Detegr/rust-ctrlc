@@ -10,8 +10,8 @@
 extern crate ctrlc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::sleep;
-use std::time::Duration;
+use std::thread;
+use std::time;
 
 fn main() {
     let running = Arc::new(AtomicBool::new(true));
@@ -21,7 +21,7 @@ fn main() {
     }).expect("Error setting Ctrl-C handler");
     println!("Waiting for Ctrl-C...");
     while running.load(Ordering::SeqCst) {
-        sleep(Duration::from_millis(1));
+        thread::sleep(time::Duration::from_millis(10));
     }
     println!("Got it! Exiting...");
 }

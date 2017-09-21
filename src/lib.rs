@@ -46,8 +46,13 @@
 //! the handler specified by `set_handler()` will be executed for both `SIGINT` and `SIGTERM`.
 //!
 
+#[macro_use]
+
 mod error;
 mod platform;
+pub use platform::Signal;
+mod signal;
+pub use signal::*;
 
 pub use error::Error;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
@@ -92,9 +97,9 @@ where
     unsafe {
         match platform::init_os_handler() {
             Ok(_) => {}
-            err => {
+            Err(err) => {
                 INIT.store(false, Ordering::SeqCst);
-                return err;
+                return Err(err.into());
             }
         }
     }
