@@ -27,6 +27,10 @@ mod platform {
         self::nix::sys::signal::raise(self::nix::sys::signal::SIGINT).unwrap();
     }
 
+    pub unsafe fn raise_termination() {
+        self::nix::sys::signal::raise(self::nix::sys::signal::SIGTERM).unwrap();
+    }
+
     pub unsafe fn print(fmt: ::std::fmt::Arguments) {
         use self::io::Write;
         let stdout = ::std::io::stdout();
@@ -212,6 +216,10 @@ mod platform {
         assert!(GenerateConsoleCtrlEvent(winapi::um::wincon::CTRL_C_EVENT, 0) != 0);
     }
 
+    pub unsafe fn raise_termination() {
+        assert!(self::kernel32::GenerateConsoleCtrlEvent(self::winapi::CTRL_BREAK_EVENT, 0) != 0);
+    }
+
     /// Print to both consoles, this is not thread safe.
     pub unsafe fn print(fmt: ::std::fmt::Arguments) {
         use self::io::Write;
@@ -246,6 +254,75 @@ fn test_set_handler() {
     }
 }
 
+fn test_set_multiple_handlers() {
+    let counter1 = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc);
+    let counter2 = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc);
+    assert!(counter1.is_ok());
+    assert!(counter2.is_err());
+    drop(counter1);
+    let counter3 = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc);
+    assert!(counter3.is_ok());
+}
+
+fn test_counter() {
+    use ctrlc::Counter;
+
+    fn test_counter_with(counter: Counter, raise_function: unsafe fn()) {
+        use std::thread;
+        use std::time::Duration;
+
+        let ctrlc_thread = thread::spawn(move || {
+            for _ in 0..5 {
+                thread::sleep(Duration::from_millis(10));
+                unsafe {
+                    raise_function();
+                }
+            }
+        });
+
+        loop {
+            let val = counter.get().unwrap();
+            if val > 4 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        ctrlc_thread.join().unwrap();
+
+        let counter_value = counter.get().unwrap();
+        unsafe {
+            raise_function();
+        };
+        // Wait some time for the signal handler to run
+        thread::sleep(Duration::from_millis(100));
+
+        let new_counter_value = counter.get().unwrap();
+        assert_eq!(new_counter_value, counter_value + 1);
+    }
+
+    let c = Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
+    test_counter_with(c, platform::raise_ctrl_c as unsafe fn());
+
+    let c = Counter::new(ctrlc::SignalType::Termination).unwrap();
+    test_counter_with(c, platform::raise_termination as unsafe fn());
+}
+
+fn test_invalid_counter() {
+    use std::mem;
+    use ctrlc::{Counter, Error, Signal, SignalType};
+
+    // Create invalid signal
+    let invalid_signal: Signal = unsafe { mem::transmute(12345) };
+
+    if let Err(Error::NoSuchSignal(SignalType::Other(sig))) =
+        Counter::new(SignalType::Other(invalid_signal))
+    {
+        assert_eq!(sig, invalid_signal);
+    } else {
+        assert!(false);
+    }
+}
+
 macro_rules! run_tests {
     ( $($test_fn:ident),* ) => {
         unsafe {
@@ -273,6 +350,9 @@ fn main() {
         (default)(info);
     }));
 
+    run_tests!(test_counter);
+    run_tests!(test_invalid_counter);
+    run_tests!(test_set_multiple_handlers);
     run_tests!(test_set_handler);
 
     unsafe {

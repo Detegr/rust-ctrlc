@@ -10,14 +10,15 @@
 use platform;
 
 /// A cross-platform way to represent Ctrl-C or program termination signal. Other
-/// signals/events are supported via `Other`-variant.
+/// signals are supported via `Other`-variant.
 #[derive(Debug)]
 pub enum SignalType {
     /// Ctrl-C
+    /// Maps to `SIGINT` on *nix, `CTRL_C_EVENT` on Windows.
     Ctrlc,
     /// Program termination
     /// Maps to `SIGTERM` on *nix, `CTRL_CLOSE_EVENT` on Windows.
     Termination,
-    /// Other signal/event using platform-specific data
+    /// Other signal using platform-specific data
     Other(platform::Signal),
 }
