@@ -245,7 +245,7 @@ fn test_set_handler() {
 fn test_counter() {
     use ctrlc::Counter;
 
-    fn test_counter_with(counter: &Counter, raise_function: &'static unsafe fn()) {
+    fn test_counter_with(counter: &Counter, raise_function: unsafe fn()) {
         use std::thread;
         use std::time::Duration;
 
@@ -276,9 +276,9 @@ fn test_counter() {
     }
 
     let counter = Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
-    test_counter_with(&counter, &(platform::raise_ctrl_c as unsafe fn()));
+    test_counter_with(&counter, platform::raise_ctrl_c as unsafe fn());
     let counter = Counter::new(ctrlc::SignalType::Termination).unwrap();
-    test_counter_with(&counter, &(platform::raise_termination as unsafe fn()));
+    test_counter_with(&counter, platform::raise_termination as unsafe fn());
 }
 
 fn test_invalid_counter() {
