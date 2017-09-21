@@ -7,12 +7,15 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate kernel32;
-extern crate winapi;
+pub extern crate kernel32;
+pub extern crate winapi;
 
-use self::winapi::{c_long, BOOL, DWORD, FALSE, HANDLE, TRUE};
-use std::ptr;
+use signal::SignalType;
 use std::io;
+use std::ops::Range;
+use std::ptr;
+use self::winapi::{c_long, BOOL, CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_SHUTDOWN_EVENT, DWORD,
+                   FALSE, HANDLE, TRUE};
 
 /// Platform specific error type
 pub type Error = io::Error;
@@ -20,8 +23,24 @@ pub type Error = io::Error;
 /// Platform specific signal type
 pub type Signal = DWORD;
 
+/// Iterator returning available signals on this system
+pub fn signal_iterator() -> Range<DWORD> {
+    (CTRL_C_EVENT..CTRL_SHUTDOWN_EVENT + 1)
+}
+
 const MAX_SEM_COUNT: c_long = 255;
 static mut SEMAPHORE: HANDLE = 0 as HANDLE;
+
+impl SignalType {
+    /// Get the underlying platform specific signal
+    pub fn to_platform_signal(&self) -> Signal {
+        match *self {
+            SignalType::Ctrlc => CTRL_C_EVENT,
+            SignalType::Termination => CTRL_BREAK_EVENT,
+            SignalType::Other(s) => s,
+        }
+    }
+}
 
 unsafe extern "system" fn os_handler(_: DWORD) -> BOOL {
     // Assuming this always succeeds. Can't really handle errors in any meaningful way.
@@ -29,7 +48,7 @@ unsafe extern "system" fn os_handler(_: DWORD) -> BOOL {
     TRUE
 }
 
-/// Register os signal handler.
+/// Registers an os signal handler.
 ///
 /// Must be called before calling [`block_ctrl_c()`](fn.block_ctrl_c.html)
 /// and should only be called once.

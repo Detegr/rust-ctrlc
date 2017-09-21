@@ -47,11 +47,16 @@
 //!
 
 #[macro_use]
+extern crate lazy_static;
 
+mod counter;
 mod error;
 mod platform;
-pub use platform::Signal;
 mod signal;
+mod signalmap;
+
+pub use counter::*;
+pub use platform::Signal;
 pub use signal::*;
 
 pub use error::Error;
@@ -86,6 +91,7 @@ static INIT: AtomicBool = ATOMIC_BOOL_INIT;
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
+#[deprecated(note = "Use Counter or Channel to prevent creating an extra thread")]
 pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
 where
     F: Fn() -> () + 'static + Send,
