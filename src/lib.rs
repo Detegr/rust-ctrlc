@@ -46,8 +46,16 @@
 //! the handler specified by `set_handler()` will be executed for both `SIGINT` and `SIGTERM`.
 //!
 
+#[macro_use]
+extern crate lazy_static;
+
+mod counter;
+pub use counter::*;
 mod error;
 mod platform;
+pub use platform::Signal;
+mod signal;
+pub use signal::*;
 
 pub use error::Error;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
@@ -81,8 +89,10 @@ static INIT: AtomicBool = ATOMIC_BOOL_INIT;
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
+#[deprecated(note = "Use Counter or Channel to prevent creating an extra thread")]
 pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
-    where F: Fn() -> () + 'static + Send
+where
+    F: Fn() -> () + 'static + Send,
 {
     if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
         return Err(Error::MultipleHandlers);
@@ -91,20 +101,19 @@ pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
     unsafe {
         match platform::init_os_handler() {
             Ok(_) => {}
-            err => {
+            Err(err) => {
                 INIT.store(false, Ordering::SeqCst);
-                return err;
+                return Err(err.into());
             }
         }
     }
 
     thread::spawn(move || loop {
-                      unsafe {
-                          platform::block_ctrl_c()
-                              .expect("Critical system error while waiting for Ctrl-C");
-                      }
-                      user_handler();
-                  });
+        unsafe {
+            platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
+        }
+        user_handler();
+    });
 
     Ok(())
 }

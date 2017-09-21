@@ -64,9 +64,13 @@ pub unsafe fn block_ctrl_c() -> Result<(), Error> {
         WAIT_OBJECT_0 => Ok(()),
         WAIT_FAILED => Err(Error::System(io::Error::last_os_error())),
         ret => {
-            Err(Error::System(io::Error::new(io::ErrorKind::Other,
-                                             format!("WaitForSingleObject(), unexpected return value \"{:x}\"",
-                                                     ret))))
+            Err(Error::System(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "WaitForSingleObject(), unexpected return value \"{:x}\"",
+                    ret
+                ),
+            )))
         }
     }
 }
