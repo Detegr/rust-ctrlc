@@ -1,4 +1,4 @@
-// Copyright (c) 2015 CtrlC developers
+// Copyright (c) 2017 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -13,7 +13,7 @@ extern crate ctrlc;
 mod platform {
     extern crate nix;
 
-    use ::std::io;
+    use std::io;
 
     pub unsafe fn setup() -> io::Result<()> {
         Ok(())
@@ -25,6 +25,10 @@ mod platform {
 
     pub unsafe fn raise_ctrl_c() {
         self::nix::sys::signal::raise(self::nix::sys::signal::SIGINT).unwrap();
+    }
+
+    pub unsafe fn raise_termination() {
+        self::nix::sys::signal::raise(self::nix::sys::signal::SIGTERM).unwrap();
     }
 
     pub unsafe fn print(fmt: ::std::fmt::Arguments) {
@@ -64,8 +68,9 @@ mod platform {
                         buf.as_ptr() as *const VOID,
                         buf.len() as DWORD,
                         &mut n as *mut DWORD,
-                        ptr::null_mut()
-                    ) == 0 {
+                        ptr::null_mut(),
+                    ) == 0
+                    {
                         Err(io::Error::last_os_error())
                     } else {
                         Ok(n as usize)
@@ -140,7 +145,7 @@ mod platform {
             ptr::null_mut(),
             OPEN_EXISTING,
             0,
-            ptr::null_mut()
+            ptr::null_mut(),
         );
 
         if stdout.is_null() || stdout == INVALID_HANDLE_VALUE {
@@ -222,17 +227,73 @@ mod platform {
 
 fn test_set_handler() {
     let (tx, rx) = ::std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        tx.send(true).unwrap();
-    }).unwrap();
+    ctrlc::set_handler(move || { tx.send(true).unwrap(); }).unwrap();
 
-    unsafe { platform::raise_ctrl_c(); }
+    unsafe {
+        platform::raise_ctrl_c();
+    }
 
-    rx.recv_timeout(::std::time::Duration::from_secs(10)).unwrap();
+    rx.recv_timeout(::std::time::Duration::from_secs(10))
+        .unwrap();
 
     match ctrlc::set_handler(|| {}) {
-        Err(ctrlc::Error::MultipleHandlers) => {},
+        Err(ctrlc::Error::MultipleHandlers) => {}
         ret => panic!("{:?}", ret),
+    }
+}
+
+fn test_counter() {
+    use ctrlc::Counter;
+
+    fn test_counter_with(counter: &Counter, raise_function: unsafe fn()) {
+        use std::thread;
+        use std::time::Duration;
+
+        let ctrlc_thread = thread::spawn(move || for _ in 0..5 {
+            thread::sleep(Duration::from_millis(10));
+            unsafe {
+                raise_function();
+            }
+        });
+
+        loop {
+            let val = counter.get().unwrap();
+            if val > 0 {
+                if val > 4 {
+                    break;
+                }
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        ctrlc_thread.join().unwrap();
+
+        let counter_value = counter.get().unwrap();
+        unsafe {
+            raise_function();
+        };
+        let new_counter_value = counter.get().unwrap();
+        assert!(counter_value + 1 == new_counter_value);
+    }
+
+    let counter = Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
+    test_counter_with(&counter, platform::raise_ctrl_c as unsafe fn());
+    let counter = Counter::new(ctrlc::SignalType::Termination).unwrap();
+    test_counter_with(&counter, platform::raise_termination as unsafe fn());
+}
+
+fn test_invalid_counter() {
+    use std::mem;
+    use ctrlc::{Counter, Error, Signal, SignalType};
+
+    // Create invalid signal
+    let invalid_signal: Signal = unsafe { mem::transmute(12345) };
+
+    if let Err(Error::NoSuchSignal(SignalType::Other(sig))) =
+        Counter::new(SignalType::Other(invalid_signal))
+    {
+        assert_eq!(sig, invalid_signal);
+    } else {
+        assert!(false);
     }
 }
 
@@ -251,15 +312,23 @@ macro_rules! run_tests {
 }
 
 fn main() {
-    unsafe { platform::setup().unwrap(); }
-    
+    unsafe {
+        platform::setup().unwrap();
+    }
+
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        unsafe { platform::cleanup().unwrap(); }
+        unsafe {
+            platform::cleanup().unwrap();
+        }
         (default)(info);
     }));
 
+    run_tests!(test_counter);
+    run_tests!(test_invalid_counter);
     run_tests!(test_set_handler);
 
-    unsafe { platform::cleanup().unwrap(); }
+    unsafe {
+        platform::cleanup().unwrap();
+    }
 }

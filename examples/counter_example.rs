@@ -1,4 +1,4 @@
-// Copyright (c) 2015 CtrlC developers
+// Copyright (c) 2017 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -8,18 +8,13 @@
 // according to those terms.
 
 extern crate ctrlc;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time;
 
 fn main() {
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || { r.store(false, Ordering::SeqCst); })
-        .expect("Error setting Ctrl-C handler");
+    let counter = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
     println!("Waiting for Ctrl-C...");
-    while running.load(Ordering::SeqCst) {
+    while counter.get().unwrap() == 0 {
         thread::sleep(time::Duration::from_millis(10));
     }
     println!("Got it! Exiting...");
