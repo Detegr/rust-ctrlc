@@ -46,7 +46,7 @@ impl Counter {
     /// This is not necessary as per the OS, but is implemented to keep the functionality similar
     /// between the OSes.
     pub fn new(signal: SignalType) -> Result<Counter, Error> {
-        let platform_signal = signal.to_platform_signal();
+        let platform_signal = signal.into();
 
         if !SIGNALS.signals.iter().any(|&s| platform_signal == s) {
             return Err(Error::NoSuchSignal(signal));

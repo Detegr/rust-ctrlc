@@ -323,6 +323,35 @@ fn test_invalid_counter() {
     }
 }
 
+fn test_channel() {
+    use ctrlc::{Channel, SignalType};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::thread;
+    use std::time::Duration;
+
+    let flag = Arc::new(AtomicBool::new(false));
+    let flag2 = flag.clone();
+    let channel = Channel::new(SignalType::Ctrlc).unwrap();
+    let channel_thread = thread::spawn(move || {
+        let _ = channel.recv();
+        flag2.store(true, Ordering::Relaxed);
+    });
+    let raise_thread = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(10));
+        unsafe {
+            platform::raise_ctrl_c();
+        }
+    });
+
+    while !flag.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    channel_thread.join().unwrap();
+    raise_thread.join().unwrap();
+}
+
 macro_rules! run_tests {
     ( $($test_fn:ident),* ) => {
         unsafe {
@@ -353,6 +382,7 @@ fn main() {
     run_tests!(test_counter);
     run_tests!(test_invalid_counter);
     run_tests!(test_set_multiple_handlers);
+    run_tests!(test_channel);
     run_tests!(test_set_handler);
 
     unsafe {

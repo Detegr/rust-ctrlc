@@ -48,13 +48,14 @@
 
 #[macro_use]
 extern crate lazy_static;
-
+mod channel;
 mod counter;
 mod error;
 mod platform;
 mod signal;
 mod signalmap;
 
+pub use channel::*;
 pub use counter::*;
 pub use platform::Signal;
 pub use signal::*;

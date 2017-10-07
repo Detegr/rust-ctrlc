@@ -7,17 +7,11 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-pub mod channel;
-pub mod counter;
+extern crate ctrlc;
 
-#[cfg(unix)]
-mod unix;
-
-#[cfg(windows)]
-mod windows;
-
-#[cfg(unix)]
-pub use self::unix::*;
-
-#[cfg(windows)]
-pub use self::windows::*;
+fn main() {
+    let channel = ctrlc::Channel::new(ctrlc::SignalType::Ctrlc).unwrap();
+    println!("Waiting for Ctrl-C...");
+    channel.recv().unwrap();
+    println!("Got it! Exiting...");
+}

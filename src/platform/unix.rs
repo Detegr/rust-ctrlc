@@ -1,4 +1,3 @@
-// Copyright (c) 2017 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -11,8 +10,6 @@ pub extern crate nix;
 
 use self::nix::sys::signal;
 use self::nix::unistd;
-use error::Error as CtrlcError;
-use signal::SignalType;
 use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
@@ -23,20 +20,12 @@ pub type Error = nix::Error;
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
 
+pub const CTRL_C_SIGNAL: Signal = signal::Signal::SIGINT;
+pub const TERMINATION_SIGNAL: Signal = signal::Signal::SIGTERM;
+
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> nix::sys::signal::SignalIterator {
     Signal::iterator()
-}
-
-impl SignalType {
-    /// Get the underlying platform specific signal
-    pub fn to_platform_signal(&self) -> Signal {
-        match *self {
-            SignalType::Ctrlc => signal::Signal::SIGINT,
-            SignalType::Termination => signal::Signal::SIGTERM,
-            SignalType::Other(s) => s,
-        }
-    }
 }
 
 extern "C" fn os_handler(_: nix::libc::c_int) {

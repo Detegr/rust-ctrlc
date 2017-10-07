@@ -7,17 +7,4 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-pub mod channel;
-pub mod counter;
-
-#[cfg(unix)]
-mod unix;
-
-#[cfg(windows)]
-mod windows;
-
-#[cfg(unix)]
-pub use self::unix::*;
-
-#[cfg(windows)]
-pub use self::windows::*;
+pub use platform::channel::*;

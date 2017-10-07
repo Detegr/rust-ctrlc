@@ -24,6 +24,9 @@ pub type Error = io::Error;
 /// Platform specific signal type
 pub type Signal = DWORD;
 
+pub const CTRL_C_SIGNAL: Signal = CTRL_C_EVENT;
+pub const TERMINATION_SIGNAL: Signal = CTRL_BREAK_EVENT;
+
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> Range<DWORD> {
     (CTRL_C_EVENT..CTRL_SHUTDOWN_EVENT + 1)
