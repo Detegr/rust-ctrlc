@@ -29,12 +29,24 @@ pub type Error = io::Error;
 /// Platform specific signal type
 pub type Signal = DWORD;
 
+/// TODO Platform specific pipe handle type
+pub type SignalEmitter = HANDLE;
+impl SignalEvent for SignalEmitter {
+    fn emit(&self, _signal: &Signal) {
+        unsafe { ReleaseSemaphore(*self, 1, ptr::null_mut()) };
+    }
+}
+
+pub const CTRL_C_SIGNAL: Signal = CTRL_C_EVENT;
+pub const TERMINATION_SIGNAL: Signal = CTRL_BREAK_EVENT;
+pub const UNINITIALIZED_SIGNAL_EMITTER: HANDLE = winapi::um::handleapi::INVALID_HANDLE_VALUE;
+
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> Range<DWORD> {
     (CTRL_C_EVENT..CTRL_SHUTDOWN_EVENT + 1)
 }
 
-const MAX_SEM_COUNT: c_long = 255;
+pub const MAX_SEM_COUNT: c_long = 255;
 static mut SEMAPHORE: HANDLE = 0 as HANDLE;
 
 impl SignalType {

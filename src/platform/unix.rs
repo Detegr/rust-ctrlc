@@ -1,4 +1,3 @@
-// Copyright (c) 2017 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -13,6 +12,8 @@ use self::nix::sys::signal::Signal as nix_signal;
 use self::nix::unistd;
 use crate::error::Error as CtrlcError;
 use crate::signal::SignalType;
+use crate::signalevent::SignalEvent;
+use byteorder::{ByteOrder, LittleEndian};
 use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
@@ -22,6 +23,21 @@ pub type Error = nix::Error;
 
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
+
+/// TODO Platform specific pipe handle type
+pub type SignalEmitter = (RawFd, RawFd);
+impl SignalEvent for SignalEmitter {
+    fn emit(&self, signal: &Signal) {
+        let mut buf = [0u8; 4];
+        LittleEndian::write_i32(&mut buf[..], *signal as i32);
+        // Assuming this always succeeds. Can't really handle errors in any meaningful way.
+        let _ = unistd::write(self.1, &buf);
+    }
+}
+
+pub const CTRL_C_SIGNAL: Signal = nix_signal::SIGINT;
+pub const TERMINATION_SIGNAL: Signal = nix_signal::SIGTERM;
+pub const UNINITIALIZED_SIGNAL_EMITTER: (RawFd, RawFd) = (-1, -1);
 
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> nix::sys::signal::SignalIterator {
@@ -119,7 +135,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         signal::SigSet::empty(),
     );
 
-    let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
+    let _sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
         Ok(old) => old,
         Err(e) => return Err(close_pipe(e)),
     };
@@ -129,14 +145,14 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         let sigterm_old = match signal::sigaction(signal::Signal::SIGTERM, &new_action) {
             Ok(old) => old,
             Err(e) => {
-                signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
+                signal::sigaction(signal::Signal::SIGINT, &_sigint_old).unwrap();
                 return Err(close_pipe(e));
             }
         };
         match signal::sigaction(signal::Signal::SIGHUP, &new_action) {
             Ok(_) => {}
             Err(e) => {
-                signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
+                signal::sigaction(signal::Signal::SIGINT, &_sigint_old).unwrap();
                 signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
                 return Err(close_pipe(e));
             }
