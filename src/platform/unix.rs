@@ -1,4 +1,3 @@
-// Copyright (c) 2017 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -11,8 +10,9 @@ pub extern crate nix;
 
 use self::nix::sys::signal;
 use self::nix::unistd;
+use crate::signalevent::SignalEvent;
+use byteorder::{ByteOrder, LittleEndian};
 use error::Error as CtrlcError;
-use signal::SignalType;
 use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
@@ -23,20 +23,24 @@ pub type Error = nix::Error;
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
 
+/// TODO Platform specific pipe handle type
+pub type SignalEmitter = (RawFd, RawFd);
+impl SignalEvent for SignalEmitter {
+    fn emit(&self, signal: &Signal) {
+        let mut buf = [0u8; 4];
+        LittleEndian::write_i32(&mut buf[..], *signal as i32);
+        // Assuming this always succeeds. Can't really handle errors in any meaningful way.
+        let _ = unistd::write(self.1, &buf);
+    }
+}
+
+pub const CTRL_C_SIGNAL: Signal = signal::Signal::SIGINT;
+pub const TERMINATION_SIGNAL: Signal = signal::Signal::SIGTERM;
+pub const UNINITIALIZED_SIGNAL_EMITTER: (RawFd, RawFd) = (-1, -1);
+
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> nix::sys::signal::SignalIterator {
     Signal::iterator()
-}
-
-impl SignalType {
-    /// Get the underlying platform specific signal
-    pub fn to_platform_signal(&self) -> Signal {
-        match *self {
-            SignalType::Ctrlc => signal::Signal::SIGINT,
-            SignalType::Termination => signal::Signal::SIGTERM,
-            SignalType::Other(s) => s,
-        }
-    }
 }
 
 extern "C" fn os_handler(_: nix::libc::c_int) {

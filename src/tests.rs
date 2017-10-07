@@ -42,9 +42,7 @@ mod platform {
 mod platform {
     extern crate winapi;
 
-    use std::io;
-    use std::ptr;
-
+    use self::winapi::minwindef::DWORD;
     use self::winapi::shared::minwindef::DWORD;
     use self::winapi::shared::ntdef::{CHAR, HANDLE};
     use self::winapi::um::consoleapi::{AllocConsole, GetConsoleMode};
@@ -53,6 +51,11 @@ mod platform {
     use self::winapi::um::processenv::{GetStdHandle, SetStdHandle};
     use self::winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
     use self::winapi::um::wincon::{AttachConsole, FreeConsole, GenerateConsoleCtrlEvent};
+    use self::winapi::winnt::{CHAR, HANDLE};
+    use std::io;
+    use std::io;
+    use std::ptr;
+    use std::ptr;
 
     /// Stores a piped stdout handle or a cache that gets
     /// flushed when we reattached to the old console.
@@ -139,9 +142,9 @@ mod platform {
     }
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
-        use self::winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
-        use self::winapi::um::handleapi::INVALID_HANDLE_VALUE;
-        use self::winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
+        use self::winapi::fileapi::OPEN_EXISTING;
+        use self::winapi::shlobj::INVALID_HANDLE_VALUE;
+        use self::winapi::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
 
         let stdout = CreateFileA(
             "CONOUT$\0".as_ptr() as *const CHAR,
@@ -217,7 +220,7 @@ mod platform {
     }
 
     pub unsafe fn raise_termination() {
-        assert!(self::kernel32::GenerateConsoleCtrlEvent(self::winapi::CTRL_BREAK_EVENT, 0) != 0);
+        assert!(GenerateConsoleCtrlEvent(winapi::um::wincon::CTRL_BREAK_EVENT, 0) != 0);
     }
 
     /// Print to both consoles, this is not thread safe.
@@ -323,6 +326,109 @@ fn test_invalid_counter() {
     }
 }
 
+fn test_channel() {
+    use ctrlc::{Channel, SignalType};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let flag = Arc::new(AtomicBool::new(false));
+    let flag2 = flag.clone();
+    let channel = Channel::new(SignalType::Ctrlc).unwrap();
+    let termination_channel = Channel::new(SignalType::Termination).unwrap();
+    let channel_thread = thread::spawn(move || {
+        let sig = channel.recv().expect("Channel should not return error");
+        if sig != SignalType::Ctrlc {
+            panic!("Invalid signal type received");
+        }
+        let sig = termination_channel
+            .recv()
+            .expect("Channel should not return error");
+        if sig != SignalType::Termination {
+            panic!("Invalid signal type received");
+        }
+        flag2.store(true, Ordering::Relaxed);
+    });
+    let raise_thread = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(10));
+        unsafe {
+            platform::raise_ctrl_c();
+            platform::raise_termination();
+        }
+    });
+
+    while !flag.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    channel_thread.join().unwrap();
+    raise_thread.join().unwrap();
+}
+
+fn test_channel_multiple_signals() {
+    use ctrlc::{Channel, SignalType};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let flag = Arc::new(AtomicBool::new(false));
+    let flag2 = flag.clone();
+    let channel = Channel::new_with_multiple()
+        .add_signal(SignalType::Ctrlc)
+        .add_signal(SignalType::Termination)
+        .build()
+        .unwrap();
+    let channel_thread = thread::spawn(move || {
+        let sig = channel.recv().expect("Channel should not return error");
+        if sig != SignalType::Ctrlc {
+            panic!("Invalid signal type received");
+        }
+        let sig = channel.recv().expect("Channel should not return error");
+        if sig != SignalType::Termination {
+            panic!("Invalid signal type received");
+        }
+        flag2.store(true, Ordering::Relaxed);
+    });
+    let raise_thread = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(10));
+        unsafe {
+            platform::raise_ctrl_c();
+            platform::raise_termination();
+        }
+    });
+
+    while !flag.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    channel_thread.join().unwrap();
+    raise_thread.join().unwrap();
+
+    let channel = Channel::new_with_multiple()
+        .add_signal(SignalType::Ctrlc)
+        .add_signal(SignalType::Termination)
+        .build()
+        .unwrap();
+
+    let try = channel.try_recv();
+    assert_eq!(try, Err(ctrlc::Error::ChannelEmpty));
+
+    // On Windows, the handler has not always been executed yet
+    // if we don't sleep after raising a signal.
+
+    unsafe { platform::raise_ctrl_c() }
+    thread::sleep(Duration::from_millis(1));
+    let try = channel.try_recv();
+    assert_eq!(try, Ok(SignalType::Ctrlc));
+
+    unsafe { platform::raise_termination() }
+    thread::sleep(Duration::from_millis(1));
+    let try = channel.try_recv();
+    assert_eq!(try, Ok(SignalType::Termination));
+}
+
 macro_rules! run_tests {
     ( $($test_fn:ident),* ) => {
         unsafe {
@@ -353,6 +459,8 @@ fn main() {
     run_tests!(test_counter);
     run_tests!(test_invalid_counter);
     run_tests!(test_set_multiple_handlers);
+    run_tests!(test_channel);
+    run_tests!(test_channel_multiple_signals);
     run_tests!(test_set_handler);
 
     unsafe {
