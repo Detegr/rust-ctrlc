@@ -44,7 +44,8 @@ mod platform {
     use self::winapi::winnt::{CHAR, HANDLE};
     use self::winapi::minwindef::DWORD;
 
-    /// Stores a piped stdout handle or a cache that gets flushed when we reattached to the old console.
+    /// Stores a piped stdout handle or a cache that gets
+    /// flushed when we reattached to the old console.
     enum Output {
         Pipe(HANDLE),
         Cached(Vec<u8>),
