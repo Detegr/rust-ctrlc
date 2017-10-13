@@ -95,7 +95,7 @@ mod platform {
 
     static mut PIPE: (RawFd, RawFd) = (-1, -1);
 
-    extern fn os_handler(_: nix::c_int) {
+    extern "C" fn os_handler(_: nix::c_int) {
         // Assuming this always succeeds. Can't really handle errors in any meaningful way.
         unsafe {
             unistd::write(PIPE.1, &[0u8]).is_ok();
@@ -115,7 +115,9 @@ mod platform {
         use self::nix::fcntl;
         use self::nix::sys::signal;
 
-        PIPE = unistd::pipe2(fcntl::O_CLOEXEC).map_err(|e| Error::System(e.into()))?;
+        PIPE = unistd::pipe2(fcntl::O_CLOEXEC).map_err(
+            |e| Error::System(e.into()),
+        )?;
 
         let close_pipe = |e: nix::Error| -> Error {
             unistd::close(PIPE.1).is_ok();
@@ -129,10 +131,8 @@ mod platform {
         }
 
         let handler = signal::SigHandler::Handler(os_handler);
-        let new_action = signal::SigAction::new(handler,
-            signal::SA_RESTART,
-            signal::SigSet::empty()
-        );
+        let new_action =
+            signal::SigAction::new(handler, signal::SA_RESTART, signal::SigSet::empty());
 
         let _old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
             Ok(old) => old,
@@ -141,11 +141,11 @@ mod platform {
 
         #[cfg(feature = "termination")]
         match signal::sigaction(signal::Signal::SIGTERM, &new_action) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 signal::sigaction(signal::Signal::SIGINT, &_old).unwrap();
                 return Err(close_pipe(e));
-            },
+            }
         }
 
         // TODO: Maybe throw an error if old action is not SigDfl.
@@ -171,7 +171,7 @@ mod platform {
             match unistd::read(PIPE.0, &mut buf[..]) {
                 Ok(1) => break,
                 Ok(_) => return Err(Error::System(io::ErrorKind::UnexpectedEof.into()).into()),
-                Err(nix::Error::Sys(nix::Errno::EINTR)) => {},
+                Err(nix::Error::Sys(nix::Errno::EINTR)) => {}
                 Err(e) => return Err(Error::System(e.into())),
             }
         }
@@ -240,7 +240,10 @@ mod platform {
             WAIT_FAILED => Err(Error::System(io::Error::last_os_error())),
             ret => Err(Error::System(io::Error::new(
                 io::ErrorKind::Other,
-                format!("WaitForSingleObject(), unexpected return value \"{:x}\"", ret),
+                format!(
+                    "WaitForSingleObject(), unexpected return value \"{:x}\"",
+                    ret
+                ),
             ))),
         }
     }
@@ -273,7 +276,8 @@ mod platform {
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
 pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
-    where F: Fn() -> () + 'static + Send
+where
+    F: Fn() -> () + 'static + Send,
 {
     if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
         return Err(Error::MultipleHandlers);
@@ -281,21 +285,19 @@ pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
 
     unsafe {
         match platform::init_os_handler() {
-            Ok(_) => {},
+            Ok(_) => {}
             err => {
                 INIT.store(false, Ordering::SeqCst);
                 return err;
-            },
+            }
         }
     }
 
-    thread::spawn(move || {
-        loop {
-            unsafe {
-                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
-            }
-            user_handler();
+    thread::spawn(move || loop {
+        unsafe {
+            platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
         }
+        user_handler();
     });
 
     Ok(())

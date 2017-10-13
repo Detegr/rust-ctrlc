@@ -13,7 +13,7 @@ extern crate ctrlc;
 mod platform {
     extern crate nix;
 
-    use ::std::io;
+    use std::io;
 
     pub unsafe fn setup() -> io::Result<()> {
         Ok(())
@@ -64,8 +64,9 @@ mod platform {
                         buf.as_ptr() as *const VOID,
                         buf.len() as DWORD,
                         &mut n as *mut DWORD,
-                        ptr::null_mut()
-                    ) == 0 {
+                        ptr::null_mut(),
+                    ) == 0
+                    {
                         Err(io::Error::last_os_error())
                     } else {
                         Ok(n as usize)
@@ -140,7 +141,7 @@ mod platform {
             ptr::null_mut(),
             OPEN_EXISTING,
             0,
-            ptr::null_mut()
+            ptr::null_mut(),
         );
 
         if stdout.is_null() || stdout == INVALID_HANDLE_VALUE {
@@ -222,16 +223,17 @@ mod platform {
 
 fn test_set_handler() {
     let (tx, rx) = ::std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        tx.send(true).unwrap();
-    }).unwrap();
+    ctrlc::set_handler(move || { tx.send(true).unwrap(); }).unwrap();
 
-    unsafe { platform::raise_ctrl_c(); }
+    unsafe {
+        platform::raise_ctrl_c();
+    }
 
-    rx.recv_timeout(::std::time::Duration::from_secs(10)).unwrap();
+    rx.recv_timeout(::std::time::Duration::from_secs(10))
+        .unwrap();
 
     match ctrlc::set_handler(|| {}) {
-        Err(ctrlc::Error::MultipleHandlers) => {},
+        Err(ctrlc::Error::MultipleHandlers) => {}
         ret => panic!("{:?}", ret),
     }
 }
@@ -251,15 +253,21 @@ macro_rules! run_tests {
 }
 
 fn main() {
-    unsafe { platform::setup().unwrap(); }
-    
+    unsafe {
+        platform::setup().unwrap();
+    }
+
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        unsafe { platform::cleanup().unwrap(); }
+        unsafe {
+            platform::cleanup().unwrap();
+        }
         (default)(info);
     }));
 
     run_tests!(test_set_handler);
 
-    unsafe { platform::cleanup().unwrap(); }
+    unsafe {
+        platform::cleanup().unwrap();
+    }
 }
