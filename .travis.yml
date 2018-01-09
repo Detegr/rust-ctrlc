@@ -6,24 +6,13 @@ rust:
   - nightly
 env:
 matrix:
-  allow_failures:
-    - env: SYNTAX_CHECK_NIGHTLY=1
   include:
-    - rust: stable
-      env: SYNTAX_CHECK_STABLE=1
-      before_script:
-        - export PATH="$PATH:$HOME/.cargo/bin"
-        - which rustfmt || cargo install rustfmt
-      script:
-        - cargo fmt -- --write-mode=diff
     - rust: nightly
-      env: SYNTAX_CHECK_NIGHTLY=1
-      before_script:
-        - export PATH="$PATH:$HOME/.cargo/bin"
-        - which rustfmt || cargo install rustfmt-nightly
+      env: SYNTAX_CHECK=1
+      install:
+        - cargo install --force rustfmt-nightly
       script:
         - cargo fmt -- --write-mode=diff
-
 
 notifications:
     email: false
