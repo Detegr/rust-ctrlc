@@ -36,8 +36,8 @@ mod platform {
 
 #[cfg(windows)]
 mod platform {
-    extern crate winapi;
     extern crate kernel32;
+    extern crate winapi;
 
     use std::io;
     use std::ptr;
@@ -131,7 +131,7 @@ mod platform {
     }
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
-        use self::winapi::winnt::{GENERIC_READ, GENERIC_WRITE, FILE_SHARE_WRITE};
+        use self::winapi::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
         use self::winapi::shlobj::INVALID_HANDLE_VALUE;
         use self::winapi::fileapi::OPEN_EXISTING;
 
@@ -224,7 +224,9 @@ mod platform {
 
 fn test_set_handler() {
     let (tx, rx) = ::std::sync::mpsc::channel();
-    ctrlc::set_handler(move || { tx.send(true).unwrap(); }).unwrap();
+    ctrlc::set_handler(move || {
+        tx.send(true).unwrap();
+    }).unwrap();
 
     unsafe {
         platform::raise_ctrl_c();

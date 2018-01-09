@@ -36,9 +36,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
     use self::nix::fcntl;
     use self::nix::sys::signal;
 
-    PIPE = unistd::pipe2(fcntl::O_CLOEXEC).map_err(
-        |e| Error::System(e.into()),
-    )?;
+    PIPE = unistd::pipe2(fcntl::O_CLOEXEC).map_err(|e| Error::System(e.into()))?;
 
     let close_pipe = |e: nix::Error| -> Error {
         unistd::close(PIPE.1).is_ok();

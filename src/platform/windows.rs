@@ -7,11 +7,11 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate winapi;
 extern crate kernel32;
+extern crate winapi;
 
 use super::Error;
-use self::winapi::{HANDLE, BOOL, DWORD, TRUE, FALSE, c_long};
+use self::winapi::{c_long, BOOL, DWORD, FALSE, HANDLE, TRUE};
 use std::ptr;
 use std::io;
 
@@ -58,19 +58,17 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
 ///
 #[inline]
 pub unsafe fn block_ctrl_c() -> Result<(), Error> {
-    use self::winapi::{INFINITE, WAIT_OBJECT_0, WAIT_FAILED};
+    use self::winapi::{WAIT_OBJECT_0, INFINITE, WAIT_FAILED};
 
     match kernel32::WaitForSingleObject(SEMAPHORE, INFINITE) {
         WAIT_OBJECT_0 => Ok(()),
         WAIT_FAILED => Err(Error::System(io::Error::last_os_error())),
-        ret => {
-            Err(Error::System(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "WaitForSingleObject(), unexpected return value \"{:x}\"",
-                    ret
-                ),
-            )))
-        }
+        ret => Err(Error::System(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "WaitForSingleObject(), unexpected return value \"{:x}\"",
+                ret
+            ),
+        ))),
     }
 }
