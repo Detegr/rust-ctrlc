@@ -11,7 +11,7 @@ homepage = "https://github.com/Detegr/rust-ctrlc"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 
 [dependencies]
-nix = "0.8"
+nix = "0.9.0"
 winapi = "0.2"
 kernel32-sys = "0.2"
 
