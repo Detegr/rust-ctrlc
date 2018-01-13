@@ -10,7 +10,7 @@
 extern crate kernel32;
 extern crate winapi;
 
-use super::Error;
+use error::Error;
 use self::winapi::{c_long, BOOL, DWORD, FALSE, HANDLE, TRUE};
 use std::ptr;
 use std::io;
