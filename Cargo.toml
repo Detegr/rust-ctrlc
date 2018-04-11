@@ -13,11 +13,11 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 nix = "0.10"
 
 [target.'cfg(windows)'.dependencies]
-winapi = "0.2"
+winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "winbase"] }
 
-[dependencies]
-kernel32-sys = "0.2"
-
+[target.'cfg(windows)'.dev-dependencies]
+winapi = { version = "0.3", features = ["fileapi", "processenv", "winnt"] }
+ 
 [features]
 termination = []
 

@@ -36,13 +36,19 @@ mod platform {
 
 #[cfg(windows)]
 mod platform {
-    extern crate kernel32;
     extern crate winapi;
 
     use std::io;
     use std::ptr;
-    use self::winapi::winnt::{CHAR, HANDLE};
-    use self::winapi::minwindef::DWORD;
+
+    use self::winapi::shared::minwindef::DWORD;
+    use self::winapi::shared::ntdef::{HANDLE, CHAR};
+    use self::winapi::um::consoleapi::{GetConsoleMode, AllocConsole};
+    use self::winapi::um::fileapi::WriteFile;
+    use self::winapi::um::handleapi::INVALID_HANDLE_VALUE;
+    use self::winapi::um::processenv::{GetStdHandle, SetStdHandle};
+    use self::winapi::um::winbase::{STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
+    use self::winapi::um::wincon::{FreeConsole, AttachConsole, GenerateConsoleCtrlEvent};
 
     /// Stores a piped stdout handle or a cache that gets
     /// flushed when we reattached to the old console.
@@ -57,10 +63,10 @@ mod platform {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             match *self {
                 Output::Pipe(handle) => unsafe {
-                    use self::winapi::winnt::VOID;
+                    use self::winapi::shared::ntdef::VOID;
 
                     let mut n = 0u32;
-                    if self::kernel32::WriteFile(
+                    if WriteFile(
                         handle,
                         buf.as_ptr() as *const VOID,
                         buf.len() as DWORD,
@@ -86,16 +92,14 @@ mod platform {
         /// Stores current piped stdout or creates a new output cache that will
         /// be written to stdout at a later time.
         fn new() -> io::Result<Output> {
-            use self::winapi::shlobj::INVALID_HANDLE_VALUE;
-
             unsafe {
-                let stdout = self::kernel32::GetStdHandle(winapi::STD_OUTPUT_HANDLE);
+                let stdout = GetStdHandle(STD_OUTPUT_HANDLE);
                 if stdout.is_null() || stdout == INVALID_HANDLE_VALUE {
                     return Err(io::Error::last_os_error());
                 }
 
                 let mut out = 0u32;
-                match self::kernel32::GetConsoleMode(stdout, &mut out as *mut DWORD) {
+                match GetConsoleMode(stdout, &mut out as *mut DWORD) {
                     0 => Ok(Output::Pipe(stdout)),
                     _ => Ok(Output::Cached(Vec::new())),
                 }
@@ -109,11 +113,11 @@ mod platform {
                 Output::Cached(_) => get_stdout()?,
             };
 
-            if self::kernel32::SetStdHandle(winapi::STD_OUTPUT_HANDLE, stdout) == 0 {
+            if SetStdHandle(STD_OUTPUT_HANDLE, stdout) == 0 {
                 return Err(io::Error::last_os_error());
             }
 
-            if self::kernel32::SetStdHandle(winapi::STD_ERROR_HANDLE, stdout) == 0 {
+            if SetStdHandle(STD_ERROR_HANDLE, stdout) == 0 {
                 return Err(io::Error::last_os_error());
             }
 
@@ -131,11 +135,10 @@ mod platform {
     }
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
-        use self::winapi::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
-        use self::winapi::shlobj::INVALID_HANDLE_VALUE;
-        use self::winapi::fileapi::OPEN_EXISTING;
+        use self::winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
+        use self::winapi::um::fileapi::{OPEN_EXISTING, CreateFileA};
 
-        let stdout = self::kernel32::CreateFileA(
+        let stdout = CreateFileA(
             "CONOUT$\0".as_ptr() as *const CHAR,
             GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_WRITE,
@@ -163,11 +166,11 @@ mod platform {
     pub unsafe fn setup() -> io::Result<()> {
         let old_out = Output::new()?;
 
-        if self::kernel32::FreeConsole() == 0 {
+        if FreeConsole() == 0 {
             return Err(io::Error::last_os_error());
         }
 
-        if self::kernel32::AllocConsole() == 0 {
+        if AllocConsole() == 0 {
             return Err(io::Error::last_os_error());
         }
 
@@ -175,11 +178,11 @@ mod platform {
         // of the new terminal.
 
         let stdout = get_stdout()?;
-        if self::kernel32::SetStdHandle(winapi::STD_OUTPUT_HANDLE, stdout) == 0 {
+        if SetStdHandle(STD_OUTPUT_HANDLE, stdout) == 0 {
             return Err(io::Error::last_os_error());
         }
 
-        if self::kernel32::SetStdHandle(winapi::STD_ERROR_HANDLE, stdout) == 0 {
+        if SetStdHandle(STD_ERROR_HANDLE, stdout) == 0 {
             return Err(io::Error::last_os_error());
         }
 
@@ -190,11 +193,11 @@ mod platform {
 
     /// Reattach to the old console.
     pub unsafe fn cleanup() -> io::Result<()> {
-        if self::kernel32::FreeConsole() == 0 {
+        if FreeConsole() == 0 {
             return Err(io::Error::last_os_error());
         }
 
-        if self::kernel32::AttachConsole(winapi::wincon::ATTACH_PARENT_PROCESS) == 0 {
+        if AttachConsole(winapi::um::wincon::ATTACH_PARENT_PROCESS) == 0 {
             return Err(io::Error::last_os_error());
         }
 
@@ -205,7 +208,7 @@ mod platform {
 
     /// This will signal the whole process group.
     pub unsafe fn raise_ctrl_c() {
-        assert!(self::kernel32::GenerateConsoleCtrlEvent(self::winapi::CTRL_C_EVENT, 0) != 0);
+        assert!(GenerateConsoleCtrlEvent(winapi::um::wincon::CTRL_C_EVENT, 0) != 0);
     }
 
     /// Print to both consoles, this is not thread safe.
