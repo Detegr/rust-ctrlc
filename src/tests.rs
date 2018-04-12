@@ -42,13 +42,13 @@ mod platform {
     use std::ptr;
 
     use self::winapi::shared::minwindef::DWORD;
-    use self::winapi::shared::ntdef::{HANDLE, CHAR};
-    use self::winapi::um::consoleapi::{GetConsoleMode, AllocConsole};
+    use self::winapi::shared::ntdef::{CHAR, HANDLE};
+    use self::winapi::um::consoleapi::{AllocConsole, GetConsoleMode};
     use self::winapi::um::fileapi::WriteFile;
     use self::winapi::um::handleapi::INVALID_HANDLE_VALUE;
     use self::winapi::um::processenv::{GetStdHandle, SetStdHandle};
-    use self::winapi::um::winbase::{STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
-    use self::winapi::um::wincon::{FreeConsole, AttachConsole, GenerateConsoleCtrlEvent};
+    use self::winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
+    use self::winapi::um::wincon::{AttachConsole, FreeConsole, GenerateConsoleCtrlEvent};
 
     /// Stores a piped stdout handle or a cache that gets
     /// flushed when we reattached to the old console.
@@ -136,7 +136,7 @@ mod platform {
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
         use self::winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
-        use self::winapi::um::fileapi::{OPEN_EXISTING, CreateFileA};
+        use self::winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
 
         let stdout = CreateFileA(
             "CONOUT$\0".as_ptr() as *const CHAR,
