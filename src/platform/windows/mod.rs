@@ -11,8 +11,8 @@ extern crate kernel32;
 extern crate winapi;
 
 use self::winapi::{c_long, BOOL, DWORD, FALSE, HANDLE, TRUE};
-use std::ptr;
 use std::io;
+use std::ptr;
 
 /// Platform specific error type
 pub type Error = io::Error;

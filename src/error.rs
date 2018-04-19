@@ -1,5 +1,5 @@
-use std::fmt;
 use std;
+use std::fmt;
 
 /// Ctrl-C error.
 #[derive(Debug)]

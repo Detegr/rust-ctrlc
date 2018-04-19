@@ -39,10 +39,10 @@ mod platform {
     extern crate kernel32;
     extern crate winapi;
 
+    use self::winapi::minwindef::DWORD;
+    use self::winapi::winnt::{CHAR, HANDLE};
     use std::io;
     use std::ptr;
-    use self::winapi::winnt::{CHAR, HANDLE};
-    use self::winapi::minwindef::DWORD;
 
     /// Stores a piped stdout handle or a cache that gets
     /// flushed when we reattached to the old console.
@@ -131,9 +131,9 @@ mod platform {
     }
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
-        use self::winapi::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
-        use self::winapi::shlobj::INVALID_HANDLE_VALUE;
         use self::winapi::fileapi::OPEN_EXISTING;
+        use self::winapi::shlobj::INVALID_HANDLE_VALUE;
+        use self::winapi::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
 
         let stdout = self::kernel32::CreateFileA(
             "CONOUT$\0".as_ptr() as *const CHAR,

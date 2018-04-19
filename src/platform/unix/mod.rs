@@ -9,8 +9,8 @@
 
 extern crate nix;
 
-use error::Error as CtrlcError;
 use self::nix::unistd;
+use error::Error as CtrlcError;
 use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);

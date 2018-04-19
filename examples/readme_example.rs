@@ -8,8 +8,8 @@
 // according to those terms.
 
 extern crate ctrlc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time;
 
