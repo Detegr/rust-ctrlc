@@ -16,8 +16,8 @@ use self::winapi::um::consoleapi::SetConsoleCtrlHandler;
 use self::winapi::um::handleapi::CloseHandle;
 use self::winapi::um::synchapi::{ReleaseSemaphore, WaitForSingleObject};
 use self::winapi::um::winbase::{CreateSemaphoreA, WAIT_OBJECT_0, INFINITE, WAIT_FAILED};
-use std::ptr;
 use std::io;
+use std::ptr;
 
 /// Platform specific error type
 pub type Error = io::Error;
