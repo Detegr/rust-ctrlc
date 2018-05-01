@@ -7,10 +7,15 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate kernel32;
 extern crate winapi;
 
-use self::winapi::{c_long, BOOL, DWORD, FALSE, HANDLE, TRUE};
+use self::winapi::ctypes::c_long;
+use self::winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
+use self::winapi::shared::ntdef::HANDLE;
+use self::winapi::um::consoleapi::SetConsoleCtrlHandler;
+use self::winapi::um::handleapi::CloseHandle;
+use self::winapi::um::synchapi::{ReleaseSemaphore, WaitForSingleObject};
+use self::winapi::um::winbase::{CreateSemaphoreA, WAIT_OBJECT_0, INFINITE, WAIT_FAILED};
 use std::io;
 use std::ptr;
 
@@ -25,7 +30,7 @@ static mut SEMAPHORE: HANDLE = 0 as HANDLE;
 
 unsafe extern "system" fn os_handler(_: DWORD) -> BOOL {
     // Assuming this always succeeds. Can't really handle errors in any meaningful way.
-    kernel32::ReleaseSemaphore(SEMAPHORE, 1, ptr::null_mut());
+    ReleaseSemaphore(SEMAPHORE, 1, ptr::null_mut());
     TRUE
 }
 
@@ -39,14 +44,14 @@ unsafe extern "system" fn os_handler(_: DWORD) -> BOOL {
 ///
 #[inline]
 pub unsafe fn init_os_handler() -> Result<(), Error> {
-    SEMAPHORE = kernel32::CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
+    SEMAPHORE = CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
     if SEMAPHORE.is_null() {
         return Err(io::Error::last_os_error());
     }
 
-    if kernel32::SetConsoleCtrlHandler(Some(os_handler), TRUE) == FALSE {
+    if SetConsoleCtrlHandler(Some(os_handler), TRUE) == FALSE {
         let e = io::Error::last_os_error();
-        kernel32::CloseHandle(SEMAPHORE);
+        CloseHandle(SEMAPHORE);
         SEMAPHORE = 0 as HANDLE;
         return Err(e);
     }
@@ -63,9 +68,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
 ///
 #[inline]
 pub unsafe fn block_ctrl_c() -> Result<(), Error> {
-    use self::winapi::{WAIT_OBJECT_0, INFINITE, WAIT_FAILED};
-
-    match kernel32::WaitForSingleObject(SEMAPHORE, INFINITE) {
+    match WaitForSingleObject(SEMAPHORE, INFINITE) {
         WAIT_OBJECT_0 => Ok(()),
         WAIT_FAILED => Err(io::Error::last_os_error()),
         ret => Err(io::Error::new(
