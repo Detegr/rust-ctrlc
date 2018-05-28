@@ -11,12 +11,10 @@ use self::windows::*;
 use error::Error;
 use signal::SignalType;
 
-// This wrapper exists to allow commenting Channel without duplicating the comments for
-// different platforms
-
 /// Channel abstraction for signals
 pub struct Channel {
     inner: ChannelType,
+    _prevent_sync: *const (),
 }
 
 impl Channel {
@@ -49,6 +47,7 @@ impl Channel {
     pub fn new(signal: SignalType) -> Result<Channel, Error> {
         Ok(Channel {
             inner: ChannelType::new(signal)?,
+            _prevent_sync: ::std::ptr::null(),
         })
     }
 
@@ -58,3 +57,9 @@ impl Channel {
         self.inner.recv()
     }
 }
+
+unsafe impl Send for Channel {}
+
+// When negative trait bounds are stabilized, this can be used
+// instead of _prevent_sync field.
+//unsafe impl !Sync for Channel {}

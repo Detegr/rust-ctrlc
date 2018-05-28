@@ -9,11 +9,11 @@
 
 extern crate byteorder;
 
-use error::Error;
-use platform::unix::nix;
 use self::byteorder::{ByteOrder, LittleEndian};
 use self::nix::sys::signal as nix_signal;
 use self::nix::unistd;
+use error::Error;
+use platform::unix::nix;
 use signal::SignalType;
 use std::os::unix::io::RawFd;
 
@@ -23,7 +23,6 @@ pub type ChannelType = UnixChannel;
 
 pub struct UnixChannel {
     platform_signal: nix_signal::Signal,
-    _prevent_sync: *const (),
 }
 impl UnixChannel {
     extern "C" fn os_handler(signum: nix::libc::c_int) {
@@ -73,10 +72,7 @@ impl UnixChannel {
                 Err(e) => return Err(close_pipe(e)),
             }
         }
-        Ok(UnixChannel {
-            platform_signal,
-            _prevent_sync: ::std::ptr::null(),
-        })
+        Ok(UnixChannel { platform_signal })
     }
     pub fn recv(&self) -> Result<SignalType, Error> {
         use std::io;
@@ -105,10 +101,6 @@ impl UnixChannel {
         }
     }
 }
-unsafe impl Send for UnixChannel {}
-// When negative trait bounds are stabilized, this can be used
-// instead of _prevent_sync field.
-//unsafe impl !Sync for UnixChannel {}
 
 impl Drop for UnixChannel {
     /// Dropping the counter unregisters the signal handler attached to the counter.
