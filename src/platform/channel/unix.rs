@@ -14,10 +14,9 @@ use self::nix::sys::signal as nix_signal;
 use self::nix::unistd;
 use error::Error;
 use platform::unix::nix;
+use platform::unix::nix::sys::signal::Signal;
 use signal::SignalType;
-use std::os::unix::io::RawFd;
-
-static mut PIPE: (RawFd, RawFd) = (-1, -1);
+use signalmap::SIGNALS;
 
 pub type ChannelType = UnixChannel;
 
@@ -26,11 +25,14 @@ pub struct UnixChannel {
 }
 impl UnixChannel {
     extern "C" fn os_handler(signum: nix::libc::c_int) {
-        unsafe {
+        let pipes = Signal::from_c_int(signum)
+            .ok()
+            .and_then(|signal| SIGNALS.get_pipe_handles(&signal));
+        if let Some(pipes) = pipes {
             let mut buf = [0u8; 4];
             LittleEndian::write_i32(&mut buf[..], signum);
             // Assuming this always succeeds. Can't really handle errors in any meaningful way.
-            unistd::write(PIPE.1, &buf).is_ok();
+            unistd::write(pipes.1, &buf).is_ok();
         }
     }
     pub fn new(signal: SignalType) -> Result<UnixChannel, Error> {
@@ -40,18 +42,25 @@ impl UnixChannel {
         let platform_signal = signal.into();
 
         unsafe {
-            PIPE = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+            if !SIGNALS.has_pipe_handles(&platform_signal) {
+                let pipe = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+                let close_pipe = |e: nix::Error| -> Error {
+                    unistd::close(pipe.1).is_ok();
+                    unistd::close(pipe.0).is_ok();
+                    e.into()
+                };
 
-            let close_pipe = |e: nix::Error| -> Error {
-                unistd::close(PIPE.1).is_ok();
-                unistd::close(PIPE.0).is_ok();
-                e.into()
-            };
+                // Make sure we never block on write in the os handler.
+                if let Err(e) =
+                    fcntl::fcntl(pipe.1, fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK))
+                {
+                    return Err(close_pipe(e));
+                }
 
-            // Make sure we never block on write in the os handler.
-            if let Err(e) = fcntl::fcntl(PIPE.1, fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK))
-            {
-                return Err(close_pipe(e));
+                // TODO: Need to check first whether we have signal already set
+                let pipes = SIGNALS.get_pipe_handles_mut(&platform_signal).unwrap();
+                pipes.0 = pipe.0;
+                pipes.1 = pipe.1;
             }
 
             let handler = signal::SigHandler::Handler(UnixChannel::os_handler);
@@ -64,22 +73,26 @@ impl UnixChannel {
             match signal::sigaction(platform_signal, &new_action) {
                 Ok(old) => {
                     if old.handler() != nix_signal::SigHandler::SigDfl {
-                        unistd::close(PIPE.1)?;
-                        unistd::close(PIPE.0)?;
                         return Err(Error::MultipleHandlers);
                     }
                 }
-                Err(e) => return Err(close_pipe(e)),
+                Err(e) => return Err(e.into()),
             }
         }
         Ok(UnixChannel { platform_signal })
     }
     pub fn recv(&self) -> Result<SignalType, Error> {
+        let pipe_handles = match SIGNALS.get_pipe_handles(&self.platform_signal) {
+            None => {
+                return Err(Error::NoSuchSignal(self.platform_signal.into()));
+            }
+            Some(pipe) => pipe,
+        };
         use std::io;
         let mut buf = [0u8; 4];
         let mut total_bytes = 0;
         loop {
-            match unistd::read(unsafe { PIPE.0 }, &mut buf[total_bytes..]) {
+            match unistd::read(pipe_handles.0, &mut buf[total_bytes..]) {
                 Ok(i) if i <= 4 => {
                     total_bytes += i;
                     if total_bytes < 4 {

@@ -10,6 +10,7 @@ pub extern crate nix;
 
 use self::nix::sys::signal;
 use self::nix::unistd;
+use error::Error as CtrlcError;
 use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
@@ -19,6 +20,9 @@ pub type Error = nix::Error;
 
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
+
+/// Platform specific pipe handle type
+pub type PipeHandle = RawFd;
 
 pub const CTRL_C_SIGNAL: Signal = signal::Signal::SIGINT;
 pub const TERMINATION_SIGNAL: Signal = signal::Signal::SIGTERM;

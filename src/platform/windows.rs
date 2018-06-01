@@ -11,7 +11,8 @@ pub extern crate kernel32;
 pub extern crate winapi;
 
 use self::winapi::{
-    c_long, BOOL, CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_SHUTDOWN_EVENT, DWORD, FALSE, HANDLE, TRUE,
+    c_long, BOOL, CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_SHUTDOWN_EVENT, DWORD, FALSE, HANDLE,
+    PHANDLE, TRUE,
 };
 use signal::SignalType;
 use std::io;
@@ -23,6 +24,9 @@ pub type Error = io::Error;
 
 /// Platform specific signal type
 pub type Signal = DWORD;
+
+/// Platform specific pipe handle type
+pub type PipeHandle = PHANDLE;
 
 pub const CTRL_C_SIGNAL: Signal = CTRL_C_EVENT;
 pub const TERMINATION_SIGNAL: Signal = CTRL_BREAK_EVENT;
