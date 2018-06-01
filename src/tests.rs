@@ -42,6 +42,8 @@ mod platform {
 mod platform {
     extern crate winapi;
 
+    use self::winapi::minwindef::DWORD;
+    use self::winapi::winnt::{CHAR, HANDLE};
     use std::io;
     use std::ptr;
 
@@ -139,9 +141,9 @@ mod platform {
     }
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
-        use self::winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
-        use self::winapi::um::handleapi::INVALID_HANDLE_VALUE;
-        use self::winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
+        use self::winapi::fileapi::OPEN_EXISTING;
+        use self::winapi::shlobj::INVALID_HANDLE_VALUE;
+        use self::winapi::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
 
         let stdout = CreateFileA(
             "CONOUT$\0".as_ptr() as *const CHAR,
@@ -308,8 +310,8 @@ fn test_counter() {
 }
 
 fn test_invalid_counter() {
-    use std::mem;
     use ctrlc::{Counter, Error, Signal, SignalType};
+    use std::mem;
 
     // Create invalid signal
     let invalid_signal: Signal = unsafe { mem::transmute(12345) };
@@ -325,22 +327,33 @@ fn test_invalid_counter() {
 
 fn test_channel() {
     use ctrlc::{Channel, SignalType};
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
     let flag = Arc::new(AtomicBool::new(false));
     let flag2 = flag.clone();
     let channel = Channel::new(SignalType::Ctrlc).unwrap();
+    let termination_channel = Channel::new(SignalType::Termination).unwrap();
     let channel_thread = thread::spawn(move || {
-        let _ = channel.recv();
+        let sig = channel.recv().expect("Channel should not return error");
+        if sig != SignalType::Ctrlc {
+            panic!("Invalid signal type received");
+        }
+        let sig = termination_channel
+            .recv()
+            .expect("Channel should not return error");
+        if sig != SignalType::Termination {
+            panic!("Invalid signal type received");
+        }
         flag2.store(true, Ordering::Relaxed);
     });
     let raise_thread = thread::spawn(move || {
         thread::sleep(Duration::from_millis(10));
         unsafe {
             platform::raise_ctrl_c();
+            platform::raise_termination();
         }
     });
 
