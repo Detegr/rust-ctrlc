@@ -135,9 +135,9 @@ mod platform {
     }
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
-        use self::winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
         use self::winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
         use self::winapi::um::handleapi::INVALID_HANDLE_VALUE;
+        use self::winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
 
         let stdout = CreateFileA(
             "CONOUT$\0".as_ptr() as *const CHAR,
