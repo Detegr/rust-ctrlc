@@ -12,7 +12,7 @@ matrix:
       install:
         - cargo install --force rustfmt-nightly
       script:
-        - cargo fmt -- --write-mode=diff
+        - cargo fmt -- --check
 
 notifications:
     email: false
