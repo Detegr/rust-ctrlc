@@ -15,7 +15,7 @@ use self::winapi::shared::ntdef::HANDLE;
 use self::winapi::um::consoleapi::SetConsoleCtrlHandler;
 use self::winapi::um::handleapi::CloseHandle;
 use self::winapi::um::synchapi::{ReleaseSemaphore, WaitForSingleObject};
-use self::winapi::um::winbase::{CreateSemaphoreA, WAIT_OBJECT_0, INFINITE, WAIT_FAILED};
+use self::winapi::um::winbase::{CreateSemaphoreA, INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
 use std::io;
 use std::ptr;
 
