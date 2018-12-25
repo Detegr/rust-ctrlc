@@ -8,8 +8,9 @@
 // according to those terms.
 
 use error::Error;
-use platform::windows::winapi::{BOOL, DWORD, FALSE, TRUE};
-use platform::windows::{Signal, kernel32};
+use platform::winapi::um::consoleapi::SetConsoleCtrlHandler;
+use platform::windows::winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
+use platform::windows::Signal;
 use signalmap::SIGNALS;
 use std::io;
 use std::sync::atomic::Ordering;
@@ -31,7 +32,7 @@ pub fn set_handler(platform_signal: Signal) -> Result<(), Error> {
     if initialized.compare_and_swap(false, true, Ordering::AcqRel) {
         return Err(Error::MultipleHandlers);
     }
-    if unsafe { kernel32::SetConsoleCtrlHandler(Some(os_handler), TRUE) } == FALSE {
+    if unsafe { SetConsoleCtrlHandler(Some(os_handler), TRUE) } == FALSE {
         let e = io::Error::last_os_error();
         return Err(e.into());
     }
@@ -43,7 +44,7 @@ pub fn reset_handler(platform_signal: Signal) {
         .index_of(&platform_signal)
         .expect("Validity of signal is checked earlier");
     let initialized = &SIGNALS.initialized[sig_index];
-    if unsafe { kernel32::SetConsoleCtrlHandler(Some(os_handler), FALSE) } == FALSE {
+    if unsafe { SetConsoleCtrlHandler(Some(os_handler), FALSE) } == FALSE {
         unreachable!("Should not fail");
     }
     initialized.compare_and_swap(true, false, Ordering::AcqRel);

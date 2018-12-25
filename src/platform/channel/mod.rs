@@ -1,3 +1,7 @@
+use error::Error;
+use signal::SignalType;
+use signalmap::SIGNALS;
+
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
@@ -7,9 +11,6 @@ use self::unix::*;
 mod windows;
 #[cfg(windows)]
 use self::windows::*;
-
-use error::Error;
-use signal::SignalType;
 
 /// Channel abstraction for signals
 pub struct Channel {
@@ -45,6 +46,12 @@ impl Channel {
     /// the registered signal.
     #[inline]
     pub fn new(signal: SignalType) -> Result<Channel, Error> {
+        let platform_signal: ::platform::Signal = signal.into();
+
+        if !SIGNALS.signals.iter().any(|&s| platform_signal == s) {
+            return Err(Error::NoSuchSignal(signal));
+        }
+
         Ok(Channel {
             inner: ChannelType::new(signal)?,
             _prevent_sync: ::std::ptr::null(),

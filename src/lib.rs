@@ -46,8 +46,10 @@
 //! the handler specified by `set_handler()` will be executed for both `SIGINT` and `SIGTERM`.
 //!
 
+extern crate byteorder;
 #[macro_use]
 extern crate lazy_static;
+
 mod channel;
 mod counter;
 mod error;

@@ -7,11 +7,9 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate byteorder;
-
-use self::byteorder::{ByteOrder, LittleEndian};
 use self::nix::sys::signal as nix_signal;
 use self::nix::unistd;
+use byteorder::{ByteOrder, LittleEndian};
 use error::Error;
 use platform::unix::nix;
 use platform::unix::nix::sys::signal::Signal;
@@ -57,7 +55,6 @@ impl UnixChannel {
                     return Err(close_pipe(e));
                 }
 
-                // TODO: Need to check first whether we have signal already set
                 let pipes = SIGNALS.get_pipe_handles_mut(&platform_signal).unwrap();
                 pipes.0 = pipe.0;
                 pipes.1 = pipe.1;
@@ -116,7 +113,7 @@ impl UnixChannel {
 }
 
 impl Drop for UnixChannel {
-    /// Dropping the counter unregisters the signal handler attached to the counter.
+    /// Dropping the channel unregisters the signal handler attached to the channel.
     fn drop(&mut self) {
         let new_action = nix_signal::SigAction::new(
             nix_signal::SigHandler::SigDfl,

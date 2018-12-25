@@ -26,6 +26,7 @@ pub type PipeHandle = RawFd;
 
 pub const CTRL_C_SIGNAL: Signal = signal::Signal::SIGINT;
 pub const TERMINATION_SIGNAL: Signal = signal::Signal::SIGTERM;
+pub const INVALID_PIPE_HANDLE: PipeHandle = -1;
 
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> nix::sys::signal::SignalIterator {

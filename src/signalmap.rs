@@ -10,7 +10,7 @@
 #[cfg(windows)]
 use std::sync::atomic::AtomicBool;
 
-use platform::PipeHandle;
+use platform::{PipeHandle, INVALID_PIPE_HANDLE};
 use std::cell::UnsafeCell;
 use std::sync::atomic::AtomicUsize;
 
@@ -49,7 +49,7 @@ where
     }
     pub fn has_pipe_handles(&self, signal: &T) -> bool {
         match self.get_pipe_handles(signal) {
-            Some(pipes) => !(pipes.0 == -1 && pipes.1 == -1),
+            Some(pipes) => !(pipes.0 == INVALID_PIPE_HANDLE && pipes.1 == INVALID_PIPE_HANDLE),
             None => false,
         }
     }
@@ -71,14 +71,13 @@ lazy_static! {
             .into_iter()
             .map(|_| AtomicUsize::new(0))
             .collect::<Vec<_>>();
+        let pipes = signals
+            .clone()
+            .into_iter()
+            .map(|_| UnsafeCell::new((INVALID_PIPE_HANDLE, INVALID_PIPE_HANDLE)))
+            .collect::<Vec<_>>();
         #[cfg(unix)]
         {
-            let pipes = signals
-                .clone()
-                .into_iter()
-                .map(|_| UnsafeCell::new((-1, -1)))
-                .collect::<Vec<_>>();
-
             SignalMap {
                 signals: signals.into_boxed_slice(),
                 counters: counters.into_boxed_slice(),
@@ -88,13 +87,6 @@ lazy_static! {
 
         #[cfg(windows)]
         {
-            use std::ptr;
-
-            let pipes = signals
-                .clone()
-                .into_iter()
-                .map(|_| UnsafeCell::new((ptr::null_mut(), ptr::null_mut())))
-                .collect::<Vec<_>>();
             let initialized = signals
                 .clone()
                 .into_iter()
