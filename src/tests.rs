@@ -361,6 +361,64 @@ fn test_channel() {
     raise_thread.join().unwrap();
 }
 
+fn test_channel_multiple_signals() {
+    use ctrlc::{Channel, SignalType};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let flag = Arc::new(AtomicBool::new(false));
+    let flag2 = flag.clone();
+    let channel = Channel::new_with_multiple()
+        .add_signal(SignalType::Ctrlc)
+        .add_signal(SignalType::Termination)
+        .build()
+        .unwrap();
+    let channel_thread = thread::spawn(move || {
+        let sig = channel.recv().expect("Channel should not return error");
+        if sig != SignalType::Ctrlc {
+            panic!("Invalid signal type received");
+        }
+        let sig = channel.recv().expect("Channel should not return error");
+        if sig != SignalType::Termination {
+            panic!("Invalid signal type received");
+        }
+        flag2.store(true, Ordering::Relaxed);
+    });
+    let raise_thread = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(10));
+        unsafe {
+            platform::raise_ctrl_c();
+            platform::raise_termination();
+        }
+    });
+
+    while !flag.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    channel_thread.join().unwrap();
+    raise_thread.join().unwrap();
+
+    let channel = Channel::new_with_multiple()
+        .add_signal(SignalType::Ctrlc)
+        .add_signal(SignalType::Termination)
+        .build()
+        .unwrap();
+
+    let try = channel.try_recv();
+    assert_eq!(try, Err(ctrlc::Error::ChannelEmpty));
+
+    unsafe { platform::raise_ctrl_c() }
+    let try = channel.try_recv();
+    assert_eq!(try, Ok(SignalType::Ctrlc));
+
+    unsafe { platform::raise_termination() }
+    let try = channel.try_recv();
+    assert_eq!(try, Ok(SignalType::Termination));
+}
+
 macro_rules! run_tests {
     ( $($test_fn:ident),* ) => {
         unsafe {
@@ -392,6 +450,7 @@ fn main() {
     run_tests!(test_invalid_counter);
     run_tests!(test_set_multiple_handlers);
     run_tests!(test_channel);
+    run_tests!(test_channel_multiple_signals);
     run_tests!(test_set_handler);
 
     unsafe {
