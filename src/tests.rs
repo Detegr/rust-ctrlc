@@ -230,7 +230,8 @@ fn test_set_handler() {
     let (tx, rx) = ::std::sync::mpsc::channel();
     ctrlc::set_handler(move || {
         tx.send(true).unwrap();
-    }).unwrap();
+    })
+    .unwrap();
 
     unsafe {
         platform::raise_ctrl_c();
