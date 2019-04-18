@@ -122,15 +122,17 @@ impl UnixChannel {
                                     total_bytes = 0;
                                     let signum = LittleEndian::read_i32(&buf);
                                     let signal = nix_signal::Signal::from_c_int(signum)?;
-                                    for sig in self.platform_signals.iter() {
-                                        if signal == *sig {
+                                    for &sig in self.platform_signals.iter() {
+                                        if signal == sig {
                                             return Ok(signal.into());
                                         }
                                     }
                                 }
                                 continue;
                             }
-                            Ok(_) => return Err(Error::System(io::ErrorKind::UnexpectedEof.into())),
+                            Ok(_) => {
+                                return Err(Error::System(io::ErrorKind::UnexpectedEof.into()))
+                            }
                             Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {}
                             Err(e) => return Err(e.into()),
                         }

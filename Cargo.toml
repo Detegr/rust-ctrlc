@@ -9,14 +9,11 @@ keywords = ["ctrlc", "signal", "SIGINT"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 
-[patch.crates-io]
-nix = { git = "https://github.com/nix-rust/nix.git" }
-
 [target.'cfg(unix)'.dependencies]
 nix = "0.13"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["consoleapi", "fileapi", "handleapi", "namedpipeapi", "synchapi", "winbase"] }
+winapi = { version = "0.3", features = ["consoleapi", "fileapi", "handleapi", "namedpipeapi", "synchapi", "winbase", "winerror"] }
 
 [dependencies]
 byteorder = "1.1.0"
