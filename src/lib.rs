@@ -55,10 +55,10 @@ mod signal;
 pub use signal::*;
 
 pub use error::Error;
-use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-static INIT: AtomicBool = ATOMIC_BOOL_INIT;
+static INIT: AtomicBool = AtomicBool::new(false);
 
 /// Register signal handler for Ctrl-C.
 ///
