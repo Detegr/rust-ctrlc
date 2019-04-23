@@ -1,7 +1,7 @@
 [package]
 name = "ctrlc"
-version = "3.1.1"
-authors = ["Antti Keränen <detegr@gmail.com>", "nabijaczleweli <nabijaczleweli@gmail.com>", "Henning Ottesen <henning@live.no>", "Peter Atashian <retep998@gmail.com>"]
+version = "3.1.2"
+authors = ["Antti Keränen <detegr@gmail.com>"]
 description = "Easy Ctrl-C handler for Rust projects"
 documentation = "http://detegr.github.io/doc/ctrlc"
 homepage = "https://github.com/Detegr/rust-ctrlc"
