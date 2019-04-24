@@ -8,6 +8,7 @@ homepage = "https://github.com/Detegr/rust-ctrlc"
 keywords = ["ctrlc", "signal", "SIGINT"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
+exclude = ["/.travis.yml", "/appveyor.yml"]
 
 [target.'cfg(unix)'.dependencies]
 nix = "0.13"
