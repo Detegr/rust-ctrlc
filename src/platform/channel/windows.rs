@@ -5,7 +5,7 @@ use platform::winapi::shared::minwindef::{LPCVOID, LPVOID};
 use platform::winapi::shared::winerror::WAIT_TIMEOUT;
 use platform::winapi::um::consoleapi::SetConsoleCtrlHandler;
 use platform::winapi::um::fileapi::{ReadFile, WriteFile};
-use platform::winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use platform::winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use platform::winapi::um::namedpipeapi::CreatePipe;
 use platform::winapi::um::synchapi::WaitForMultipleObjects;
 use platform::winapi::um::winbase::{INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
@@ -149,13 +149,25 @@ impl WindowsChannel {
 }
 
 impl Drop for WindowsChannel {
-    /// Dropping the channel unregisters the signal handler attached to the channel.
+    /// Dropping the channel unregisters the signal handlers attached to the channel.
     fn drop(&mut self) {
         for sig in self.platform_signals.iter() {
             let sig_index = SIGNALS
                 .index_of(sig)
                 .expect("Validity of signal is checked earlier");
             let initialized = &SIGNALS.initialized[sig_index];
+            for pipe in SIGNALS.get_pipe_handles_mut(&sig) {
+                unsafe {
+                    if CloseHandle(pipe.0) == 0 {
+                        unreachable!("Should not fail");
+                    }
+                    if CloseHandle(pipe.1) == 0 {
+                        unreachable!("Should not fail");
+                    }
+                    pipe.0 = INVALID_HANDLE_VALUE;
+                    pipe.1 = INVALID_HANDLE_VALUE;
+                }
+            }
             if unsafe { SetConsoleCtrlHandler(Some(os_handler), FALSE) } == FALSE {
                 unreachable!("Should not fail");
             }

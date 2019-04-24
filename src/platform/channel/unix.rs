@@ -151,7 +151,7 @@ impl UnixChannel {
 }
 
 impl Drop for UnixChannel {
-    /// Dropping the channel unregisters the signal handler attached to the channel.
+    /// Dropping the channel unregisters the signal handlers attached to the channel.
     fn drop(&mut self) {
         let new_action = nix_signal::SigAction::new(
             nix_signal::SigHandler::SigDfl,
