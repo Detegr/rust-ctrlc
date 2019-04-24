@@ -7,10 +7,10 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-use error::Error;
-use platform::unix::nix::sys::signal::Signal;
-use platform::unix::nix;
 use self::nix::sys::signal as nix_signal;
+use error::Error;
+use platform::unix::nix;
+use platform::unix::nix::sys::signal::Signal;
 use signalmap::SIGNALS;
 
 extern "C" fn os_handler(signum: nix::libc::c_int) {
