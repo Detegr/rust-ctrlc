@@ -10,6 +10,8 @@ pub extern crate nix;
 
 use self::nix::sys::signal;
 use self::nix::unistd;
+use crate::signalevent::SignalEvent;
+use byteorder::{ByteOrder, LittleEndian};
 use error::Error as CtrlcError;
 use std::os::unix::io::RawFd;
 
@@ -21,12 +23,20 @@ pub type Error = nix::Error;
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
 
-/// Platform specific pipe handle type
-pub type PipeHandle = RawFd;
+/// TODO Platform specific pipe handle type
+pub type SignalEmitter = (RawFd, RawFd);
+impl SignalEvent for SignalEmitter {
+    fn emit(&self, signal: &Signal) {
+        let mut buf = [0u8; 4];
+        LittleEndian::write_i32(&mut buf[..], *signal as i32);
+        // Assuming this always succeeds. Can't really handle errors in any meaningful way.
+        unistd::write(self.1, &buf).is_ok();
+    }
+}
 
 pub const CTRL_C_SIGNAL: Signal = signal::Signal::SIGINT;
 pub const TERMINATION_SIGNAL: Signal = signal::Signal::SIGTERM;
-pub const INVALID_PIPE_HANDLE: PipeHandle = -1;
+pub const UNINITIALIZED_SIGNAL_EMITTER: (RawFd, RawFd) = (-1, -1);
 
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> nix::sys::signal::SignalIterator {

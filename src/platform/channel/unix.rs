@@ -9,6 +9,7 @@
 
 use self::nix::sys::signal as nix_signal;
 use self::nix::unistd;
+use crate::signalevent::SignalEvent;
 use byteorder::{ByteOrder, LittleEndian};
 use error::Error;
 use platform::unix::nix;
@@ -23,14 +24,12 @@ pub struct UnixChannel {
 }
 impl UnixChannel {
     extern "C" fn os_handler(signum: nix::libc::c_int) {
-        let pipes = Signal::from_c_int(signum)
-            .ok()
-            .and_then(|signal| SIGNALS.get_pipe_handles(&signal));
-        if let Some(pipes) = pipes {
-            let mut buf = [0u8; 4];
-            LittleEndian::write_i32(&mut buf[..], signum);
-            // Assuming this always succeeds. Can't really handle errors in any meaningful way.
-            unistd::write(pipes.1, &buf).is_ok();
+        let signal = Signal::from_c_int(signum).ok();
+        if let Some(signal) = signal {
+            let pipes = SIGNALS.get_emitter(&signal);
+            if let Some(pipes) = pipes {
+                pipes.emit(&signal);
+            }
         }
     }
     pub fn new(platform_signals: impl Iterator<Item = Signal>) -> Result<UnixChannel, Error> {
@@ -40,7 +39,7 @@ impl UnixChannel {
         let signals = platform_signals.collect::<Vec<_>>();
         for platform_signal in signals.iter() {
             unsafe {
-                if !SIGNALS.has_pipe_handles(&platform_signal) {
+                if !SIGNALS.has_emitter(&platform_signal) {
                     let pipe = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
                     let close_pipe = |e: nix::Error| -> Error {
                         unistd::close(pipe.1).is_ok();
@@ -55,7 +54,7 @@ impl UnixChannel {
                         return Err(close_pipe(e));
                     }
 
-                    let pipes = SIGNALS.get_pipe_handles_mut(&platform_signal).unwrap();
+                    let pipes = SIGNALS.get_emitter_mut(&platform_signal).unwrap();
                     pipes.0 = pipe.0;
                     pipes.1 = pipe.1;
                 }
@@ -88,7 +87,7 @@ impl UnixChannel {
         let mut read_set = FdSet::new();
         let mut pipe_handles = vec![];
         for sig in self.platform_signals.iter() {
-            match SIGNALS.get_pipe_handles(sig) {
+            match SIGNALS.get_emitter(sig) {
                 None => {
                     return Err(Error::NoSuchSignal((*sig).into()));
                 }

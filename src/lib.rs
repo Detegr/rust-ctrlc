@@ -55,6 +55,7 @@ mod counter;
 mod error;
 mod platform;
 mod signal;
+mod signalevent;
 mod signalmap;
 
 pub use channel::*;

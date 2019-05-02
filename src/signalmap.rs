@@ -10,14 +10,14 @@
 #[cfg(windows)]
 use std::sync::atomic::AtomicBool;
 
-use platform::{PipeHandle, INVALID_PIPE_HANDLE};
+use platform::{SignalEmitter, UNINITIALIZED_SIGNAL_EMITTER};
 use std::cell::UnsafeCell;
 use std::sync::atomic::AtomicUsize;
 
 pub struct SignalMap<T> {
     pub signals: Box<[T]>,
     pub counters: Box<[AtomicUsize]>,
-    pub pipes: Box<[UnsafeCell<(PipeHandle, PipeHandle)>]>,
+    pub emitters: Box<[UnsafeCell<SignalEmitter>]>,
     #[cfg(windows)]
     pub initialized: Box<[AtomicBool]>,
 }
@@ -26,6 +26,9 @@ impl<T> SignalMap<T>
 where
     T: PartialEq,
 {
+    pub fn get_signal(&self, index: usize) -> Option<&T> {
+        self.signals.get(index)
+    }
     pub fn get_counter(&self, signal: &T) -> Option<&AtomicUsize> {
         self.signals
             .iter()
@@ -33,23 +36,23 @@ where
             .find(|&(sig, _)| sig == signal)
             .map(|sigmap| sigmap.1)
     }
-    pub fn get_pipe_handles_mut(&self, signal: &T) -> Option<&mut (PipeHandle, PipeHandle)> {
+    pub fn get_emitter_mut(&self, signal: &T) -> Option<&mut SignalEmitter> {
         self.signals
             .iter()
-            .zip(self.pipes.iter())
+            .zip(self.emitters.iter())
             .find(|&(sig, _)| sig == signal)
             .map(|sigmap| unsafe { &mut *sigmap.1.get() })
     }
-    pub fn get_pipe_handles(&self, signal: &T) -> Option<&(PipeHandle, PipeHandle)> {
+    pub fn get_emitter(&self, signal: &T) -> Option<&SignalEmitter> {
         self.signals
             .iter()
-            .zip(self.pipes.iter())
+            .zip(self.emitters.iter())
             .find(|&(sig, _)| sig == signal)
             .map(|sigmap| unsafe { &*sigmap.1.get() })
     }
-    pub fn has_pipe_handles(&self, signal: &T) -> bool {
-        match self.get_pipe_handles(signal) {
-            Some(pipes) => !(pipes.0 == INVALID_PIPE_HANDLE && pipes.1 == INVALID_PIPE_HANDLE),
+    pub fn has_emitter(&self, signal: &T) -> bool {
+        match self.get_emitter(signal) {
+            Some(emitter) => *emitter != UNINITIALIZED_SIGNAL_EMITTER,
             None => false,
         }
     }
@@ -71,17 +74,17 @@ lazy_static! {
             .into_iter()
             .map(|_| AtomicUsize::new(0))
             .collect::<Vec<_>>();
-        let pipes = signals
+        let emitters = signals
             .clone()
             .into_iter()
-            .map(|_| UnsafeCell::new((INVALID_PIPE_HANDLE, INVALID_PIPE_HANDLE)))
+            .map(|_| UnsafeCell::new(UNINITIALIZED_SIGNAL_EMITTER))
             .collect::<Vec<_>>();
         #[cfg(unix)]
         {
             SignalMap {
                 signals: signals.into_boxed_slice(),
                 counters: counters.into_boxed_slice(),
-                pipes: pipes.into_boxed_slice(),
+                emitters: emitters.into_boxed_slice(),
             }
         }
 
@@ -95,7 +98,7 @@ lazy_static! {
             SignalMap {
                 signals: signals.into_boxed_slice(),
                 counters: counters.into_boxed_slice(),
-                pipes: pipes.into_boxed_slice(),
+                emitters: emitters.into_boxed_slice(),
                 initialized: initialized.into_boxed_slice(),
             }
         }
