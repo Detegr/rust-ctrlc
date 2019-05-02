@@ -410,11 +410,16 @@ fn test_channel_multiple_signals() {
     let try = channel.try_recv();
     assert_eq!(try, Err(ctrlc::Error::ChannelEmpty));
 
+    // On Windows, the handler has not always been executed yet
+    // if we don't sleep after raising a signal.
+
     unsafe { platform::raise_ctrl_c() }
+    thread::sleep(Duration::from_millis(1));
     let try = channel.try_recv();
     assert_eq!(try, Ok(SignalType::Ctrlc));
 
     unsafe { platform::raise_termination() }
+    thread::sleep(Duration::from_millis(1));
     let try = channel.try_recv();
     assert_eq!(try, Ok(SignalType::Termination));
 }

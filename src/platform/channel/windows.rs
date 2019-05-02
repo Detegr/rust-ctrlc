@@ -92,7 +92,7 @@ impl WindowsChannel {
         let some_ready = i < (WAIT_OBJECT_0 + num_of_handles);
         if some_ready {
             SIGNALS
-                .get_signal(i as usize)
+                .get_signal(event_handles[i as usize])
                 .map(|sig| (*sig).into())
                 .ok_or_else(|| Error::NoSuchSignal(i.into()))
         } else if i == WAIT_FAILED {
@@ -119,6 +119,7 @@ impl Drop for WindowsChannel {
                         unreachable!("Should not fail");
                     }
                 }
+                *emitter = platform::UNINITIALIZED_SIGNAL_EMITTER;
             }
             if unsafe { SetConsoleCtrlHandler(Some(os_handler), FALSE) } == FALSE {
                 unreachable!("Should not fail");

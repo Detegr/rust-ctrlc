@@ -26,8 +26,12 @@ impl<T> SignalMap<T>
 where
     T: PartialEq,
 {
-    pub fn get_signal(&self, index: usize) -> Option<&T> {
-        self.signals.get(index)
+    pub fn get_signal(&self, emitter: &SignalEmitter) -> Option<&T> {
+        self.signals
+            .iter()
+            .zip(self.emitters.iter())
+            .find(|&(_, e)| e.get() as *const SignalEmitter == emitter)
+            .map(|sigmap| sigmap.0)
     }
     pub fn get_counter(&self, signal: &T) -> Option<&AtomicUsize> {
         self.signals
