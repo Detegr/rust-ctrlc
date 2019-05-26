@@ -104,12 +104,15 @@ where
         }
     }
 
-    thread::spawn(move || loop {
-        unsafe {
-            platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
-        }
-        user_handler();
-    });
+    thread::Builder::new()
+        .name("ctrl-c".into())
+        .spawn(move || loop {
+            unsafe {
+                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
+            }
+            user_handler();
+        })
+        .expect("failed to spawn thread");
 
     Ok(())
 }
