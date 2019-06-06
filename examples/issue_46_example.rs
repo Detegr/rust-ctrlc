@@ -15,7 +15,8 @@ fn main() {
         } else {
             process::exit(0);
         }
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
     println!("Running...");
     for _ in 1..6 {
         thread::sleep(Duration::from_secs(5));
