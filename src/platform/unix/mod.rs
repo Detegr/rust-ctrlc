@@ -24,7 +24,7 @@ pub type Signal = nix::sys::signal::Signal;
 extern "C" fn os_handler(_: nix::libc::c_int) {
     // Assuming this always succeeds. Can't really handle errors in any meaningful way.
     unsafe {
-        unistd::write(PIPE.1, &[0u8]).is_ok();
+        let _ = unistd::write(PIPE.1, &[0u8]);
     }
 }
 
@@ -44,8 +44,10 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
     PIPE = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
 
     let close_pipe = |e: nix::Error| -> Error {
-        unistd::close(PIPE.1).is_ok();
-        unistd::close(PIPE.0).is_ok();
+        // Try to close the pipes. close() should not fail,
+        // but if it does, there isn't much we can do
+        let _ = unistd::close(PIPE.1);
+        let _ = unistd::close(PIPE.0);
         e
     };
 
@@ -98,7 +100,7 @@ pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
     loop {
         match unistd::read(PIPE.0, &mut buf[..]) {
             Ok(1) => break,
-            Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into()).into()),
+            Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into())),
             Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {}
             Err(e) => return Err(e.into()),
         }
