@@ -99,15 +99,18 @@ impl UnixChannel {
         }
         let mut buf = [0u8; 4];
         let mut total_bytes = 0;
-        let some_ready = if wait {
+        let ready_ids_result = if wait {
             let mut timeout = TimeVal::zero();
-            let num_of_ready_fds =
-                select(None, Some(&mut read_set), None, None, Some(&mut timeout))?;
-            num_of_ready_fds != 0
+            select(None, Some(&mut read_set), None, None, Some(&mut timeout))
         } else {
-            let num_of_ready_fds = select(None, Some(&mut read_set), None, None, None)?;
-            num_of_ready_fds != 0
+            select(None, Some(&mut read_set), None, None, None)
         };
+        let some_ready = match ready_ids_result {
+            Ok(num) => num != 0,
+            Err(nix::Error::Sys(_)) => true,
+            Err(e) => Err(e)?,
+        };
+
         if some_ready {
             for handle in pipe_handles.iter() {
                 if read_set.contains(*handle) {
