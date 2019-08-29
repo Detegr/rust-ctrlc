@@ -11,7 +11,7 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 exclude = ["/.travis.yml", "/appveyor.yml"]
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.14"
+nix = "^0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "winbase"] }
