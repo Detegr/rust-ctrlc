@@ -7,8 +7,12 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
+pub use nix;
+
+use self::nix::sys::signal::Signal as nix_signal;
+use self::nix::unistd;
 use crate::error::Error as CtrlcError;
-use nix::unistd;
+use crate::signal::SignalType;
 use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
@@ -18,6 +22,22 @@ pub type Error = nix::Error;
 
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
+
+/// Iterator returning available signals on this system
+pub fn signal_iterator() -> nix::sys::signal::SignalIterator {
+    Signal::iterator()
+}
+
+impl SignalType {
+    /// Get the underlying platform specific signal
+    pub fn to_platform_signal(&self) -> Signal {
+        match *self {
+            SignalType::Ctrlc => nix_signal::SIGINT,
+            SignalType::Termination => nix_signal::SIGTERM,
+            SignalType::Other(s) => s,
+        }
+    }
+}
 
 extern "C" fn os_handler(_: nix::libc::c_int) {
     // Assuming this always succeeds. Can't really handle errors in any meaningful way.
