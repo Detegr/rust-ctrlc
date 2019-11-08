@@ -17,8 +17,8 @@ nix = "0.14"
 winapi = { version = "0.3", features = ["consoleapi", "fileapi", "handleapi", "namedpipeapi", "synchapi", "winbase", "winerror"] }
 
 [dependencies]
-byteorder = "1.1.0"
-lazy_static = "0.2.8"
+byteorder = "1.3"
+lazy_static = "1.4"
 
 [target.'cfg(windows)'.dev-dependencies]
 winapi = { version = "0.3", features = ["processenv", "winnt"] }
