@@ -43,7 +43,7 @@ impl UnixChannel {
         for platform_signal in signals.iter() {
             unsafe {
                 if !SIGNALS.has_emitter(&platform_signal) {
-                    let pipe = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+                    let pipe = crate::platform::unix::create_pipe()?;
                     let close_pipe = |e: nix::Error| -> Error {
                         let _ = unistd::close(pipe.1);
                         let _ = unistd::close(pipe.0);

@@ -9,7 +9,7 @@
 pub extern crate nix;
 
 use self::nix::sys::signal;
-use self::nix::unistd;
+use self::nix::{fcntl, unistd};
 use crate::signalevent::SignalEvent;
 use byteorder::{ByteOrder, LittleEndian};
 use error::Error as CtrlcError;
@@ -50,6 +50,19 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
     }
 }
 
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub(crate) fn create_pipe() -> nix::Result<(RawFd, RawFd)> {
+    let (fd1, fd2) = unistd::pipe()?;
+    fcntl::fcntl(fd1, fcntl::F_SETFD(fcntl::FdFlag::FD_CLOEXEC))?;
+    fcntl::fcntl(fd2, fcntl::F_SETFD(fcntl::FdFlag::FD_CLOEXEC))?;
+    Ok((fd1, fd2))
+}
+
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+pub(crate) fn create_pipe() -> nix::Result<(RawFd, RawFd)> {
+    unistd::pipe2(fcntl::OFlag::O_CLOEXEC)
+}
+
 /// Register os signal handler.
 ///
 /// Must be called before calling [`block_ctrl_c()`](fn.block_ctrl_c.html)
@@ -60,9 +73,7 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
 ///
 #[inline]
 pub unsafe fn init_os_handler() -> Result<(), Error> {
-    use self::nix::fcntl;
-
-    PIPE = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+    PIPE = create_pipe()?;
 
     let close_pipe = |e: nix::Error| -> Error {
         // Try to close the pipes. close() should not fail,
