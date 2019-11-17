@@ -30,7 +30,7 @@ impl Counter {
     /// fn main() {
     ///     let counter = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
     ///     println!("Waiting for Ctrl-C...");
-    ///     while counter.get().unwrap() == 0 {
+    ///     while counter.get() == 0 {
     ///         thread::sleep(time::Duration::from_millis(10));
     ///     }
     ///     println!("Got it! Exiting...");
@@ -64,16 +64,13 @@ impl Counter {
     /// # Note
     /// The value returned may not be the value of the counter anymore.
     /// This function accesses the counter atomically, but loads the value into normal `usize`
-    /// variable, so the counter may or may not have changed during the time this function returns
-    ///
-    /// # Errors
-    /// Returns `None` if the signal specified in `SignalType::Other` is not available in the
-    /// system.
-    pub fn get(&self) -> Option<usize> {
+    /// variable, so the counter may or may not have changed during the time this function returns.
+    pub fn get(&self) -> usize {
         use std::sync::atomic::Ordering;
         SIGNALS
             .get_counter(&self.signal)
-            .map(|counter| counter.load(Ordering::Acquire))
+            .unwrap()
+            .load(Ordering::Acquire)
     }
 }
 impl Drop for Counter {
