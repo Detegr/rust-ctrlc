@@ -12,23 +12,40 @@ mod windows;
 #[cfg(windows)]
 use self::windows::*;
 
-/// Builder for `Channel` allowing to specify more than one signal
+/// Builder for `Channel` allowing to specify more than one signal.
+/// # Example
+/// ```no_run
+/// use ctrlc::{Channel, SignalType};
+///
+/// fn main() {
+///     let channel = Channel::new_with_multiple()
+///         .add_signal(SignalType::Ctrlc)
+///         .add_signal(SignalType::Termination)
+///         .build()
+///         .unwrap();
+///     println!("Waiting for Ctrl-C...");
+///     channel.recv().unwrap();
+///     println!("Got it! Exiting...");
+/// }
+/// ```
 pub struct ChannelBuilder {
     signals: Vec<SignalType>,
 }
 impl ChannelBuilder {
-    /// Build a `Channel` from this channel builder
+    /// Build a `Channel` from this channel builder.
+    /// # Errors
+    /// Possible errors are documented in the documentation of [`Channel`](struct.Channel.html#errors).
     pub fn build(self) -> Result<Channel, Error> {
         Channel::new_from_multiple(&self.signals[..])
     }
-    /// Adds a signal to this channel builder
+    /// Adds a signal to this channel builder.
     pub fn add_signal(mut self, signal: SignalType) -> ChannelBuilder {
         self.signals.push(signal);
         self
     }
 }
 
-/// Channel abstraction for signals
+/// Channel abstraction for signals.
 pub struct Channel {
     inner: ChannelType,
     _prevent_sync: *const (),
@@ -41,12 +58,10 @@ impl Channel {
     /// # Example
     ///
     /// ```no_run
-    /// extern crate ctrlc;
-    /// use std::thread;
-    /// use std::time;
+    /// use ctrlc::{Channel, SignalType};
     ///
     /// fn main() {
-    ///     let channel = ctrlc::Channel::new(ctrlc::SignalType::Ctrlc).unwrap();
+    ///     let channel = Channel::new(SignalType::Ctrlc).unwrap();
     ///     println!("Waiting for Ctrl-C...");
     ///     channel.recv().unwrap();
     ///     println!("Got it! Exiting...");

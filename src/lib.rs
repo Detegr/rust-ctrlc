@@ -9,42 +9,45 @@
 
 #![warn(missing_docs)]
 
-//! Cross platform handling of Ctrl-C signals.
+//! Cross platform signal handling library
 //!
-//! [HandlerRoutine]:https://msdn.microsoft.com/en-us/library/windows/desktop/ms683242.aspx
+//! Provides two different APIs for signal handling:
+//!  * [Counter](struct.Counter.html)
+//!  * [Channel](struct.Channel.html)
 //!
-//! [set_handler()](fn.set_handler.html) allows setting a handler closure which is executed on
-//! `Ctrl+C`. On Unix, this corresponds to a `SIGINT` signal. On windows, `Ctrl+C` corresponds to
-//! [`CTRL_C_EVENT`][HandlerRoutine] or [`CTRL_BREAK_EVENT`][HandlerRoutine].
-//!
-//! Setting a handler will start a new dedicated signal handling thread where we
-//! execute the handler each time we receive a `Ctrl+C` signal. There can only be
-//! one handler, you would typically set one at the start of your program.
-//!
-//! # Example
+// [set_handler()](fn.set_handler.html) allows setting a handler closure which is executed on
+// `Ctrl+C`. On Unix, this corresponds to a `SIGINT` signal. On windows, `Ctrl+C` corresponds to
+// [`CTRL_C_EVENT`][HandlerRoutine] or [`CTRL_BREAK_EVENT`][HandlerRoutine].
+//
+//! # Counter example
 //! ```no_run
 //! extern crate ctrlc;
-//! use std::sync::atomic::{AtomicBool, Ordering};
-//! use std::sync::Arc;
+//! use std::thread;
+//! use std::time;
 //!
 //! fn main() {
-//!     let running = Arc::new(AtomicBool::new(true));
-//!     let r = running.clone();
-//!
-//!     ctrlc::set_handler(move || {
-//!         r.store(false, Ordering::SeqCst);
-//!     }).expect("Error setting Ctrl-C handler");
-//!
+//!     let counter = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
 //!     println!("Waiting for Ctrl-C...");
-//!     while running.load(Ordering::SeqCst) {}
+//!     while counter.get() == 0 {
+//!         thread::sleep(time::Duration::from_millis(10));
+//!     }
 //!     println!("Got it! Exiting...");
 //! }
 //! ```
+//! # Channel example
 //!
-//! # Handling SIGTERM
-//! Handling of `SIGTERM` can be enabled with `termination` feature. If this is enabled,
-//! the handler specified by `set_handler()` will be executed for both `SIGINT` and `SIGTERM`.
+//! ```no_run
+//! extern crate ctrlc;
+//! use std::thread;
+//! use std::time;
 //!
+//! fn main() {
+//!     let channel = ctrlc::Channel::new(ctrlc::SignalType::Ctrlc).unwrap();
+//!     println!("Waiting for Ctrl-C...");
+//!     channel.recv().unwrap();
+//!     println!("Got it! Exiting...");
+//! }
+//! ```
 
 extern crate byteorder;
 #[macro_use]
