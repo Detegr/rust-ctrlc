@@ -8,11 +8,12 @@
 // according to those terms.
 
 extern crate ctrlc;
+use ctrlc::{Counter, SignalType};
 use std::thread;
 use std::time;
 
 fn main() {
-    let counter = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
+    let counter = Counter::new(SignalType::Ctrlc).unwrap();
     println!("Waiting for Ctrl-C...");
     while counter.get() == 0 {
         thread::sleep(time::Duration::from_millis(10));

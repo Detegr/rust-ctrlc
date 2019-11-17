@@ -8,9 +8,10 @@
 // according to those terms.
 
 extern crate ctrlc;
+use ctrlc::{Channel, SignalType};
 
 fn main() {
-    let channel = ctrlc::Channel::new(ctrlc::SignalType::Ctrlc).unwrap();
+    let channel = Channel::new(SignalType::Ctrlc).unwrap();
     println!("Waiting for Ctrl-C...");
     channel.recv().unwrap();
     println!("Got it! Exiting...");
