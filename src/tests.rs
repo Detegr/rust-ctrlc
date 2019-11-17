@@ -275,7 +275,7 @@ fn test_counter() {
         });
 
         loop {
-            let val = counter.get().unwrap();
+            let val = counter.get();
             if val > 4 {
                 break;
             }
@@ -283,14 +283,14 @@ fn test_counter() {
         }
         ctrlc_thread.join().unwrap();
 
-        let counter_value = counter.get().unwrap();
+        let counter_value = counter.get();
         unsafe {
             raise_function();
         };
         // Wait some time for the signal handler to run
         thread::sleep(Duration::from_millis(100));
 
-        let new_counter_value = counter.get().unwrap();
+        let new_counter_value = counter.get();
         assert_eq!(new_counter_value, counter_value + 1);
     }
 
