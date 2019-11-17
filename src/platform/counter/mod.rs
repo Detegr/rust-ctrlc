@@ -40,11 +40,10 @@ impl Counter {
     /// # Errors
     /// Errors if the signal specified in `SignalType::Other` is not available in the system.
     ///
+    /// Errors if there already exists a Counter for the signal.
+    ///
     /// On *nix systems an error is returned if the system already has a non-default signal handler for
     /// the registered signal.
-    /// On Windows systems an error is returned if there already exists a Counter for the signal.
-    /// This is not necessary as per the OS, but is implemented to keep the functionality similar
-    /// between the OSes.
     pub fn new(signal: SignalType) -> Result<Counter, Error> {
         let platform_signal = signal.into();
 
