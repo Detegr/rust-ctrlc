@@ -6,33 +6,40 @@ A simple easy to use wrapper around Ctrl-C signal.
 
 [Documentation](http://detegr.github.io/doc/ctrlc/)
 
-## Example usage
+# Example usage
+## Counter example
 ```rust
 extern crate ctrlc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use ctrlc::{Counter, SignalType};
+use std::thread;
+use std::time;
 
 fn main() {
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+    let counter = Counter::new(SignalType::Ctrlc).unwrap();
     println!("Waiting for Ctrl-C...");
-    while running.load(Ordering::SeqCst) {}
+    while counter.get() == 0 {
+        thread::sleep(time::Duration::from_millis(10));
+    }
+    println!("Got it! Exiting...");
+}
+```
+## Channel example
+
+```rust
+extern crate ctrlc;
+use ctrlc::{Channel, SignalType};
+
+fn main() {
+    let channel = Channel::new(SignalType::Ctrlc).unwrap();
+    println!("Waiting for Ctrl-C...");
+    channel.recv().unwrap();
     println!("Got it! Exiting...");
 }
 ```
 
-#### Try the example yourself
-`cargo build --examples && target/debug/examples/readme_example`
-
-## Handling SIGTERM
-Add CtrlC to Cargo.toml using `termination` feature and CtrlC will handle both SIGINT and SIGTERM.
-```
-[dependencies]
-ctrlc = { version = "3.0", features = ["termination"] }
-```
+#### Try the examples yourself
+`cargo run --example counter_example`
+`cargo run --example channel_example`
 
 ## License
 
