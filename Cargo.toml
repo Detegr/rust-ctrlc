@@ -6,6 +6,7 @@ description = "Easy Ctrl-C handler for Rust projects"
 documentation = "http://detegr.github.io/doc/ctrlc"
 homepage = "https://github.com/Detegr/rust-ctrlc"
 keywords = ["ctrlc", "signal", "SIGINT"]
+categories = ["os"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 exclude = ["/.travis.yml", "/appveyor.yml"]
