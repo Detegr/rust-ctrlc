@@ -116,3 +116,60 @@ where
 
     Ok(())
 }
+
+/// Register signal handler for Ctrl-C.
+///
+/// Starts a new dedicated signal handling thread. Should only be called once,
+/// typically at the start of your program.
+///
+/// # Example
+/// ```no_run
+/// ctrlc::set_handler_mut(|| println!("Hello world!")).expect("Error setting Ctrl-C handler");
+/// ```
+///
+/// # Warning
+/// On Unix, any existing `SIGINT`, `SIGTERM`(if termination feature is enabled) or `SA_SIGINFO`
+/// posix signal handlers will be overwritten. On Windows, multiple handler routines are allowed,
+/// but they are called on a last-registered, first-called basis until the signal is handled.
+///
+/// On Unix, signal dispositions and signal handlers are inherited by child processes created via
+/// `fork(2)` on, but not by child processes created via `execve(2)`.
+/// Signal handlers are not inherited on Windows.
+///
+/// # Errors
+/// Will return an error if another `ctrlc::set_handler()` handler exists or if a
+/// system error occurred while setting the handler.
+///
+/// # Panics
+/// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
+///
+pub fn set_handler_mut<F>(mut user_handler: F) -> Result<(), Error>
+where
+    F: FnMut() -> () + 'static + Send,
+{
+    if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
+        return Err(Error::MultipleHandlers);
+    }
+
+    unsafe {
+        match platform::init_os_handler() {
+            Ok(_) => {}
+            Err(err) => {
+                INIT.store(false, Ordering::SeqCst);
+                return Err(err.into());
+            }
+        }
+    }
+
+    thread::Builder::new()
+        .name("ctrl-c".into())
+        .spawn(move || loop {
+            unsafe {
+                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
+            }
+            user_handler();
+        })
+        .expect("failed to spawn thread");
+
+    Ok(())
+}
