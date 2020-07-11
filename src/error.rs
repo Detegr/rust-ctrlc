@@ -21,8 +21,7 @@ impl From<::platform::Error> for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use std::error::Error;
-        write!(f, "Ctrl-C error: {}", self.description())
+        write!(f, "Ctrl-C error: {}", self)
     }
 }
 
