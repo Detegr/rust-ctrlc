@@ -86,9 +86,9 @@ static INIT: AtomicBool = AtomicBool::new(false);
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
-pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
+pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
 where
-    F: Fn() -> () + 'static + Send,
+    F: FnMut() -> () + 'static + Send,
 {
     if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
         return Err(Error::MultipleHandlers);
