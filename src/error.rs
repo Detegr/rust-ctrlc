@@ -12,6 +12,16 @@ pub enum Error {
     System(std::io::Error),
 }
 
+impl Error {
+    fn describe(&self) -> &str {
+        match *self {
+            Error::NoSuchSignal(_) => "Signal could not be found from the system",
+            Error::MultipleHandlers => "Ctrl-C signal handler already registered",
+            Error::System(_) => "Unexpected system error",
+        }
+    }
+}
+
 impl From<::platform::Error> for Error {
     fn from(e: ::platform::Error) -> Error {
         let system_error = std::io::Error::new(std::io::ErrorKind::Other, e);
@@ -21,17 +31,13 @@ impl From<::platform::Error> for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Ctrl-C error: {}", self)
+        write!(f, "Ctrl-C error: {}", self.describe())
     }
 }
 
 impl std::error::Error for Error {
     fn description(&self) -> &str {
-        match *self {
-            Error::NoSuchSignal(_) => "Signal could not be found from the system",
-            Error::MultipleHandlers => "Ctrl-C signal handler already registered",
-            Error::System(_) => "Unexpected system error",
-        }
+        self.describe()
     }
 
     fn cause(&self) -> Option<&dyn std::error::Error> {
