@@ -28,6 +28,44 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
     }
 }
 
+// pipe2(2) is not available on macOS or iOS, so we need to use pipe(2) and fcntl(2)
+#[inline]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
+    use self::nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
+
+    let pipe = unistd::pipe()?;
+
+    let mut res = Ok(0);
+
+    if flags.contains(OFlag::O_CLOEXEC) {
+        res = res
+            .and_then(|_| fcntl(pipe.0, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)))
+            .and_then(|_| fcntl(pipe.1, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)));
+    }
+
+    if flags.contains(OFlag::O_NONBLOCK) {
+        res = res
+            .and_then(|_| fcntl(pipe.0, FcntlArg::F_SETFL(OFlag::O_NONBLOCK)))
+            .and_then(|_| fcntl(pipe.1, FcntlArg::F_SETFL(OFlag::O_NONBLOCK)));
+    }
+
+    match res {
+        Ok(_) => Ok(pipe),
+        Err(e) => {
+            let _ = unistd::close(pipe.0);
+            let _ = unistd::close(pipe.1);
+            Err(e)
+        }
+    }
+}
+
+#[inline]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
+    unistd::pipe2(flags)
+}
+
 /// Register os signal handler.
 ///
 /// Must be called before calling [`block_ctrl_c()`](fn.block_ctrl_c.html)
@@ -41,7 +79,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
     use self::nix::fcntl;
     use self::nix::sys::signal;
 
-    PIPE = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+    PIPE = pipe2(fcntl::OFlag::O_CLOEXEC)?;
 
     let close_pipe = |e: nix::Error| -> Error {
         // Try to close the pipes. close() should not fail,
