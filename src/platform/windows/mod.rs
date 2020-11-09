@@ -7,17 +7,15 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate winapi;
-
-use self::winapi::ctypes::c_long;
-use self::winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
-use self::winapi::shared::ntdef::HANDLE;
-use self::winapi::um::consoleapi::SetConsoleCtrlHandler;
-use self::winapi::um::handleapi::CloseHandle;
-use self::winapi::um::synchapi::{ReleaseSemaphore, WaitForSingleObject};
-use self::winapi::um::winbase::{CreateSemaphoreA, INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
 use std::io;
 use std::ptr;
+use winapi::ctypes::c_long;
+use winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
+use winapi::shared::ntdef::HANDLE;
+use winapi::um::consoleapi::SetConsoleCtrlHandler;
+use winapi::um::handleapi::CloseHandle;
+use winapi::um::synchapi::{ReleaseSemaphore, WaitForSingleObject};
+use winapi::um::winbase::{CreateSemaphoreA, INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
 
 /// Platform specific error type
 pub type Error = io::Error;

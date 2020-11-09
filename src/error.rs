@@ -1,11 +1,11 @@
-use std;
+use crate::platform;
 use std::fmt;
 
 /// Ctrl-C error.
 #[derive(Debug)]
 pub enum Error {
     /// Signal could not be found from the system.
-    NoSuchSignal(::SignalType),
+    NoSuchSignal(crate::SignalType),
     /// Ctrl-C signal handler already registered.
     MultipleHandlers,
     /// Unexpected system error.
@@ -22,8 +22,8 @@ impl Error {
     }
 }
 
-impl From<::platform::Error> for Error {
-    fn from(e: ::platform::Error) -> Error {
+impl From<platform::Error> for Error {
+    fn from(e: platform::Error) -> Error {
         let system_error = std::io::Error::new(std::io::ErrorKind::Other, e);
         Error::System(system_error)
     }

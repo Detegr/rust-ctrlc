@@ -8,7 +8,6 @@ A simple easy to use wrapper around Ctrl-C signal.
 
 ## Example usage
 ```rust
-extern crate ctrlc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 

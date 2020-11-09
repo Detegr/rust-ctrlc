@@ -7,10 +7,8 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate nix;
-
-use self::nix::unistd;
-use error::Error as CtrlcError;
+use crate::error::Error as CtrlcError;
+use nix::unistd;
 use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
@@ -32,7 +30,7 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
 #[inline]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
-    use self::nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
+    use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
 
     let pipe = unistd::pipe()?;
 
@@ -76,8 +74,8 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 ///
 #[inline]
 pub unsafe fn init_os_handler() -> Result<(), Error> {
-    use self::nix::fcntl;
-    use self::nix::sys::signal;
+    use nix::fcntl;
+    use nix::sys::signal;
 
     PIPE = pipe2(fcntl::OFlag::O_CLOEXEC)?;
 

@@ -23,7 +23,6 @@
 //!
 //! # Example
 //! ```no_run
-//! extern crate ctrlc;
 //! use std::sync::atomic::{AtomicBool, Ordering};
 //! use std::sync::Arc;
 //!
