@@ -7,7 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-use platform;
+use crate::platform;
 
 /// A cross-platform way to represent Ctrl-C or program termination signal. Other
 /// signals/events are supported via `Other`-variant.

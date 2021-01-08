@@ -1,4 +1,3 @@
-extern crate ctrlc;
 use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

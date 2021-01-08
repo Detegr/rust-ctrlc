@@ -7,12 +7,8 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate ctrlc;
-
 #[cfg(unix)]
 mod platform {
-    extern crate nix;
-
     use std::io;
 
     pub unsafe fn setup() -> io::Result<()> {
@@ -24,7 +20,7 @@ mod platform {
     }
 
     pub unsafe fn raise_ctrl_c() {
-        self::nix::sys::signal::raise(self::nix::sys::signal::SIGINT).unwrap();
+        nix::sys::signal::raise(nix::sys::signal::SIGINT).unwrap();
     }
 
     pub unsafe fn print(fmt: ::std::fmt::Arguments) {
@@ -36,19 +32,17 @@ mod platform {
 
 #[cfg(windows)]
 mod platform {
-    extern crate winapi;
-
     use std::io;
     use std::ptr;
 
-    use self::winapi::shared::minwindef::DWORD;
-    use self::winapi::shared::ntdef::{CHAR, HANDLE};
-    use self::winapi::um::consoleapi::{AllocConsole, GetConsoleMode};
-    use self::winapi::um::fileapi::WriteFile;
-    use self::winapi::um::handleapi::INVALID_HANDLE_VALUE;
-    use self::winapi::um::processenv::{GetStdHandle, SetStdHandle};
-    use self::winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
-    use self::winapi::um::wincon::{AttachConsole, FreeConsole, GenerateConsoleCtrlEvent};
+    use winapi::shared::minwindef::DWORD;
+    use winapi::shared::ntdef::{CHAR, HANDLE};
+    use winapi::um::consoleapi::{AllocConsole, GetConsoleMode};
+    use winapi::um::fileapi::WriteFile;
+    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+    use winapi::um::processenv::{GetStdHandle, SetStdHandle};
+    use winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
+    use winapi::um::wincon::{AttachConsole, FreeConsole, GenerateConsoleCtrlEvent};
 
     /// Stores a piped stdout handle or a cache that gets
     /// flushed when we reattached to the old console.
@@ -63,7 +57,7 @@ mod platform {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             match *self {
                 Output::Pipe(handle) => unsafe {
-                    use self::winapi::shared::ntdef::VOID;
+                    use winapi::shared::ntdef::VOID;
 
                     let mut n = 0u32;
                     if WriteFile(
@@ -135,9 +129,9 @@ mod platform {
     }
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
-        use self::winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
-        use self::winapi::um::handleapi::INVALID_HANDLE_VALUE;
-        use self::winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
+        use winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
+        use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+        use winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
 
         let stdout = CreateFileA(
             "CONOUT$\0".as_ptr() as *const CHAR,

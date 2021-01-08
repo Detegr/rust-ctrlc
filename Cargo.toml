@@ -10,6 +10,7 @@ categories = ["os"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 exclude = ["/.travis.yml", "/appveyor.yml"]
+edition = "2018"
 
 [target.'cfg(unix)'.dependencies]
 nix = "0.18"
