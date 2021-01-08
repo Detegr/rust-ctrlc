@@ -7,10 +7,10 @@ rust:
 env:
 matrix:
   include:
-    - rust: nightly
+    - rust: stable
       env: SYNTAX_CHECK=1
       install:
-        - cargo install --force rustfmt-nightly
+        - rustup component add rustfmt
       script:
         - cargo fmt -- --check
 
