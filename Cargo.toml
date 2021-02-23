@@ -13,7 +13,7 @@ exclude = ["/.travis.yml", "/appveyor.yml"]
 edition = "2018"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.18"
+nix = "0.20"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "winbase"] }
