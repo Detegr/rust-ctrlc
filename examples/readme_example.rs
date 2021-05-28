@@ -7,21 +7,16 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time;
+use ctrlc;
+use std::sync::mpsc::channel;
 
 fn main() {
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
+    let (tx, rx) = channel();
+
+    ctrlc::set_handler(move || tx.send(()).expect("Could not send signal on channel."))
+        .expect("Error setting Ctrl-C handler");
+
     println!("Waiting for Ctrl-C...");
-    while running.load(Ordering::SeqCst) {
-        thread::sleep(time::Duration::from_millis(10));
-    }
+    rx.recv().expect("Could not receive from channel.");
     println!("Got it! Exiting...");
 }
