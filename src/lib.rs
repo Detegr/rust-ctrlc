@@ -103,7 +103,7 @@ pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
 where
     F: FnMut() -> () + 'static + Send,
 {
-    if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
+    if INIT.compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire).is_err() {
         return Err(Error::MultipleHandlers);
     }
 

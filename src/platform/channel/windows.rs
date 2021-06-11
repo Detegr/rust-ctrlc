@@ -41,7 +41,7 @@ impl WindowsChannel {
                 .index_of(platform_signal)
                 .expect("Validity of signal is checked earlier");
             let initialized = &SIGNALS.initialized[sig_index];
-            if initialized.compare_and_swap(false, true, Ordering::AcqRel) {
+            if initialized.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
                 return Err(Error::MultipleHandlers);
             }
             unsafe {
@@ -124,7 +124,7 @@ impl Drop for WindowsChannel {
             if unsafe { SetConsoleCtrlHandler(Some(os_handler), FALSE) } == FALSE {
                 unreachable!("Should not fail");
             }
-            initialized.compare_and_swap(true, false, Ordering::AcqRel);
+            let _ = initialized.compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire);
         }
     }
 }

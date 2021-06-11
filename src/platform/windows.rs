@@ -43,7 +43,7 @@ pub const UNINITIALIZED_SIGNAL_EMITTER: HANDLE = winapi::um::handleapi::INVALID_
 
 /// Iterator returning available signals on this system
 pub fn signal_iterator() -> Range<DWORD> {
-    (CTRL_C_EVENT..CTRL_SHUTDOWN_EVENT + 1)
+    CTRL_C_EVENT..CTRL_SHUTDOWN_EVENT + 1
 }
 
 pub const MAX_SEM_COUNT: c_long = 255;
