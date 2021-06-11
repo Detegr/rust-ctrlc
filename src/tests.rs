@@ -383,7 +383,7 @@ fn test_channel_multiple_signals() {
         flag2.store(true, Ordering::Relaxed);
     });
     let raise_thread = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(100));
         unsafe {
             platform::raise_ctrl_c();
             platform::raise_termination();
@@ -391,7 +391,7 @@ fn test_channel_multiple_signals() {
     });
 
     while !flag.load(Ordering::Relaxed) {
-        thread::sleep(Duration::from_millis(1));
+        thread::sleep(Duration::from_millis(10));
     }
 
     channel_thread.join().unwrap();
@@ -410,12 +410,12 @@ fn test_channel_multiple_signals() {
     // if we don't sleep after raising a signal.
 
     unsafe { platform::raise_ctrl_c() }
-    thread::sleep(Duration::from_millis(1));
+    thread::sleep(Duration::from_millis(10));
     let try_recv = channel.try_recv();
     assert_eq!(try_recv, Ok(SignalType::Ctrlc));
 
     unsafe { platform::raise_termination() }
-    thread::sleep(Duration::from_millis(1));
+    thread::sleep(Duration::from_millis(10));
     let try_recv = channel.try_recv();
     assert_eq!(try_recv, Ok(SignalType::Termination));
 }
