@@ -12,7 +12,7 @@ use self::nix::sys::signal as nix_signal;
 use self::nix::sys::time::{TimeVal, TimeValLike};
 use self::nix::unistd;
 use crate::error::Error;
-use crate::platform::unix::nix;
+use crate::platform::unix::{nix, utils};
 use crate::platform::unix::nix::sys::signal::Signal;
 use crate::signal::SignalType;
 use crate::signalevent::SignalEvent;
@@ -44,7 +44,7 @@ impl UnixChannel {
         for platform_signal in signals.iter() {
             unsafe {
                 if !SIGNALS.has_emitter(&platform_signal) {
-                    let pipe = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+                    let pipe = utils::pipe2(fcntl::OFlag::O_CLOEXEC)?;
                     let close_pipe = |e: nix::Error| -> Error {
                         let _ = unistd::close(pipe.1);
                         let _ = unistd::close(pipe.0);
