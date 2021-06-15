@@ -67,10 +67,7 @@ pub use platform::Signal;
 pub use signal::*;
 
 pub use error::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-
-static INIT: AtomicBool = AtomicBool::new(false);
 
 /// Register signal handler for Ctrl-C.
 ///
@@ -98,34 +95,27 @@ static INIT: AtomicBool = AtomicBool::new(false);
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
-#[deprecated(note = "Use Counter or Channel to prevent creating an extra thread")]
+#[deprecated(note = "Use Counter or Channel instead to gain better control over handled signals")]
 pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
 where
     F: FnMut() -> () + 'static + Send,
 {
-    if INIT.compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire).is_err() {
-        return Err(Error::MultipleHandlers);
+    let mut builder = Channel::new_with_multiple();
+    builder = builder.add_signal(SignalType::Ctrlc);
+
+    #[cfg(feature = "termination")]
+    {
+        builder = builder.add_signal(SignalType::Termination);
     }
 
-    unsafe {
-        match platform::init_os_handler() {
-            Ok(_) => {}
-            Err(err) => {
-                INIT.store(false, Ordering::SeqCst);
-                return Err(err.into());
-            }
-        }
-    }
+    let channel = builder.build()?;
 
-    thread::Builder::new()
-        .name("ctrl-c".into())
-        .spawn(move || loop {
-            unsafe {
-                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
-            }
+    thread::Builder::new().name("ctrl-c".into()).spawn(move || {
+        loop {
+            channel.recv().expect("receiving ctrl-c channel failed");
             user_handler();
-        })
-        .expect("failed to spawn thread");
+        }
+    }).expect("failed to spawn thread");
 
     Ok(())
 }
