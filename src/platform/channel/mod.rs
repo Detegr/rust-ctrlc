@@ -15,15 +15,18 @@ use self::windows::*;
 /// Builder for `Channel` allowing to specify more than one signal.
 /// # Example
 /// ```no_run
-/// use ctrlc::{Channel, SignalType};
+/// use ctrlc::{Channel, SignalType, Signal};
 ///
 /// fn main() {
 ///     let channel = Channel::new_with_multiple()
 ///         .add_signal(SignalType::Ctrlc)
-///         .add_signal(SignalType::Termination)
+///         .add_signal(SignalType::Other(
+///             #[cfg(unix)] { Signal::SIGTERM },
+///             #[cfg(windows)] { Signal::CTRL_BREAK_EVENT },
+///         ))
 ///         .build()
 ///         .unwrap();
-///     println!("Waiting for Ctrl-C...");
+///     println!("Waiting for signal...");
 ///     channel.recv().unwrap();
 ///     println!("Got it! Exiting...");
 /// }

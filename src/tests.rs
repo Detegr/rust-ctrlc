@@ -259,7 +259,7 @@ fn test_set_multiple_handlers() {
 }
 
 fn test_counter() {
-    use ctrlc::Counter;
+    use ctrlc::{Counter, Signal, SignalType};
 
     fn test_counter_with(counter: Counter, raise_function: unsafe fn()) {
         use std::thread;
@@ -297,7 +297,12 @@ fn test_counter() {
     let c = Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
     test_counter_with(c, platform::raise_ctrl_c as unsafe fn());
 
-    let c = Counter::new(ctrlc::SignalType::Termination).unwrap();
+
+    let c = Counter::new(SignalType::Other(
+        #[cfg(unix)] { Signal::SIGTERM },
+        #[cfg(windows)] { Signal::CTRL_BREAK_EVENT },
+    )).unwrap();
+
     test_counter_with(c, platform::raise_termination as unsafe fn());
 }
 
@@ -318,7 +323,7 @@ fn test_invalid_counter() {
 }
 
 fn test_channel() {
-    use ctrlc::{Channel, SignalType};
+    use ctrlc::{Channel, SignalType, Signal};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread;
@@ -327,7 +332,12 @@ fn test_channel() {
     let flag = Arc::new(AtomicBool::new(false));
     let flag2 = flag.clone();
     let channel = Channel::new(SignalType::Ctrlc).unwrap();
-    let termination_channel = Channel::new(SignalType::Termination).unwrap();
+    let termination_signal = SignalType::Other(
+        #[cfg(unix)] { Signal::SIGTERM },
+        #[cfg(windows)] { Signal::CTRL_BREAK_EVENT },
+    );
+    let termination_channel = Channel::new(termination_signal).unwrap();
+
     let channel_thread = thread::spawn(move || {
         let sig = channel.recv().expect("Channel should not return error");
         if sig != SignalType::Ctrlc {
@@ -336,7 +346,7 @@ fn test_channel() {
         let sig = termination_channel
             .recv()
             .expect("Channel should not return error");
-        if sig != SignalType::Termination {
+        if sig != termination_signal {
             panic!("Invalid signal type received");
         }
         flag2.store(true, Ordering::Relaxed);
@@ -358,17 +368,22 @@ fn test_channel() {
 }
 
 fn test_channel_multiple_signals() {
-    use ctrlc::{Channel, SignalType};
+    use ctrlc::{Channel, SignalType, Signal};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
+    let termination_signal = SignalType::Other(
+        #[cfg(unix)] { Signal::SIGTERM },
+        #[cfg(windows)] { Signal::CTRL_BREAK_EVENT },
+    );
+
     let flag = Arc::new(AtomicBool::new(false));
     let flag2 = flag.clone();
     let channel = Channel::new_with_multiple()
         .add_signal(SignalType::Ctrlc)
-        .add_signal(SignalType::Termination)
+        .add_signal(termination_signal)
         .build()
         .unwrap();
     let channel_thread = thread::spawn(move || {
@@ -377,7 +392,7 @@ fn test_channel_multiple_signals() {
             panic!("Invalid signal type received");
         }
         let sig = channel.recv().expect("Channel should not return error");
-        if sig != SignalType::Termination {
+        if sig != termination_signal {
             panic!("Invalid signal type received");
         }
         flag2.store(true, Ordering::Relaxed);
@@ -399,7 +414,7 @@ fn test_channel_multiple_signals() {
 
     let channel = Channel::new_with_multiple()
         .add_signal(SignalType::Ctrlc)
-        .add_signal(SignalType::Termination)
+        .add_signal(termination_signal)
         .build()
         .unwrap();
 
@@ -417,7 +432,7 @@ fn test_channel_multiple_signals() {
     unsafe { platform::raise_termination() }
     thread::sleep(Duration::from_millis(10));
     let try_recv = channel.try_recv();
-    assert_eq!(try_recv, Ok(SignalType::Termination));
+    assert_eq!(try_recv, Ok(termination_signal));
 }
 
 macro_rules! run_tests {

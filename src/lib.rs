@@ -103,9 +103,16 @@ where
     let mut builder = Channel::new_with_multiple();
     builder = builder.add_signal(SignalType::Ctrlc);
 
-    #[cfg(feature = "termination")]
+    #[cfg(all(unix,feature="termination"))]
     {
-        builder = builder.add_signal(SignalType::Termination);
+        termination_feature_deprecated();
+        builder = builder.add_signal(SignalType::Other(platform::Signal::SIGTERM));
+    }
+
+    #[cfg(all(windows, feature="termination"))]
+    {
+        termination_feature_deprecated();
+        builder = builder.add_signal(SignalType::Other(platform::Signal::CTRL_CLOSE_EVENT));
     }
 
     let channel = builder.build()?;
@@ -119,3 +126,8 @@ where
 
     Ok(())
 }
+
+#[cfg(feature="termination")]
+#[deprecated(note = "termination feature is deprecated and will go away in the next release")]
+/// Dummy function to inform users of feature "termination" that it will be deprecated
+pub fn termination_feature_deprecated() {}

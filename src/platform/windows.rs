@@ -18,7 +18,7 @@ use winapi::ctypes::c_long;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::ntdef::HANDLE;
 use winapi::um::synchapi::ReleaseSemaphore;
-use winapi::um::wincon::{CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_SHUTDOWN_EVENT};
+use winapi::um::wincon::{CTRL_C_EVENT, CTRL_SHUTDOWN_EVENT};
 
 /// Platform specific error type
 pub type Error = io::Error;
@@ -35,7 +35,6 @@ impl SignalEvent for SignalEmitter {
 }
 
 pub const CTRL_C_SIGNAL: Signal = CTRL_C_EVENT;
-pub const TERMINATION_SIGNAL: Signal = CTRL_BREAK_EVENT;
 pub const UNINITIALIZED_SIGNAL_EMITTER: HANDLE = winapi::um::handleapi::INVALID_HANDLE_VALUE;
 
 /// Iterator returning available signals on this system
@@ -50,7 +49,6 @@ impl SignalType {
     pub fn to_platform_signal(&self) -> Signal {
         match *self {
             SignalType::Ctrlc => CTRL_C_EVENT,
-            SignalType::Termination => CTRL_BREAK_EVENT,
             SignalType::Other(s) => s,
         }
     }
