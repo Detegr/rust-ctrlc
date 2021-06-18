@@ -33,7 +33,6 @@ impl SignalEvent for SignalEmitter {
 }
 
 pub const CTRL_C_SIGNAL: Signal = nix_signal::SIGINT;
-pub const TERMINATION_SIGNAL: Signal = nix_signal::SIGTERM;
 pub const UNINITIALIZED_SIGNAL_EMITTER: (RawFd, RawFd) = (-1, -1);
 
 /// Iterator returning available signals on this system
@@ -46,7 +45,6 @@ impl SignalType {
     pub fn to_platform_signal(&self) -> Signal {
         match *self {
             SignalType::Ctrlc => nix_signal::SIGINT,
-            SignalType::Termination => nix_signal::SIGTERM,
             SignalType::Other(s) => s,
         }
     }
