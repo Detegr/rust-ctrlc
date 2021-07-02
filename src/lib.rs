@@ -9,55 +9,65 @@
 
 #![warn(missing_docs)]
 
-//! Cross platform handling of Ctrl-C signals.
+//! Cross platform signal handling library
 //!
-//! [HandlerRoutine]:https://msdn.microsoft.com/en-us/library/windows/desktop/ms683242.aspx
+//! Provides two different APIs for signal handling:
+//!  * [Counter](struct.Counter.html)
+//!  * [Channel](struct.Channel.html)
 //!
-//! [set_handler()](fn.set_handler.html) allows setting a handler closure which is executed on
-//! `Ctrl+C`. On Unix, this corresponds to a `SIGINT` signal. On windows, `Ctrl+C` corresponds to
-//! [`CTRL_C_EVENT`][HandlerRoutine] or [`CTRL_BREAK_EVENT`][HandlerRoutine].
-//!
-//! Setting a handler will start a new dedicated signal handling thread where we
-//! execute the handler each time we receive a `Ctrl+C` signal. There can only be
-//! one handler, you would typically set one at the start of your program.
-//!
-//! # Example
+// [set_handler()](fn.set_handler.html) allows setting a handler closure which is executed on
+// `Ctrl+C`. On Unix, this corresponds to a `SIGINT` signal. On windows, `Ctrl+C` corresponds to
+// [`CTRL_C_EVENT`][HandlerRoutine] or [`CTRL_BREAK_EVENT`][HandlerRoutine].
+//
+//! # Counter example
 //! ```no_run
-//! use std::sync::atomic::{AtomicBool, Ordering};
-//! use std::sync::Arc;
+//! extern crate ctrlc;
+//! use std::thread;
+//! use std::time;
 //!
 //! fn main() {
-//!     let running = Arc::new(AtomicBool::new(true));
-//!     let r = running.clone();
-//!
-//!     ctrlc::set_handler(move || {
-//!         r.store(false, Ordering::SeqCst);
-//!     }).expect("Error setting Ctrl-C handler");
-//!
+//!     let counter = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
 //!     println!("Waiting for Ctrl-C...");
-//!     while running.load(Ordering::SeqCst) {}
+//!     while counter.get() == 0 {
+//!         thread::sleep(time::Duration::from_millis(10));
+//!     }
 //!     println!("Got it! Exiting...");
 //! }
 //! ```
+//! # Channel example
 //!
-//! # Handling SIGTERM
-//! Handling of `SIGTERM` can be enabled with `termination` feature. If this is enabled,
-//! the handler specified by `set_handler()` will be executed for both `SIGINT` and `SIGTERM`.
+//! ```no_run
+//! extern crate ctrlc;
+//! use std::thread;
+//! use std::time;
 //!
+//! fn main() {
+//!     let channel = ctrlc::Channel::new(ctrlc::SignalType::Ctrlc).unwrap();
+//!     println!("Waiting for Ctrl-C...");
+//!     channel.recv().unwrap();
+//!     println!("Got it! Exiting...");
+//! }
+//! ```
 
+extern crate byteorder;
 #[macro_use]
+extern crate lazy_static;
 
+mod channel;
+mod counter;
 mod error;
 mod platform;
-pub use platform::Signal;
 mod signal;
+mod signalevent;
+mod signalmap;
+
+pub use channel::*;
+pub use counter::*;
+pub use platform::Signal;
 pub use signal::*;
 
 pub use error::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-
-static INIT: AtomicBool = AtomicBool::new(false);
 
 /// Register signal handler for Ctrl-C.
 ///
@@ -85,33 +95,39 @@ static INIT: AtomicBool = AtomicBool::new(false);
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
+#[deprecated(note = "Use Counter or Channel instead to gain better control over handled signals")]
 pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
 where
     F: FnMut() -> () + 'static + Send,
 {
-    if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
-        return Err(Error::MultipleHandlers);
+    let mut builder = Channel::new_with_multiple();
+    builder = builder.add_signal(SignalType::Ctrlc);
+
+    #[cfg(all(unix,feature="termination"))]
+    {
+        termination_feature_deprecated();
+        builder = builder.add_signal(SignalType::Other(platform::Signal::SIGTERM));
     }
 
-    unsafe {
-        match platform::init_os_handler() {
-            Ok(_) => {}
-            Err(err) => {
-                INIT.store(false, Ordering::SeqCst);
-                return Err(err.into());
-            }
-        }
+    #[cfg(all(windows, feature="termination"))]
+    {
+        termination_feature_deprecated();
+        builder = builder.add_signal(SignalType::Other(platform::Signal::CTRL_CLOSE_EVENT));
     }
 
-    thread::Builder::new()
-        .name("ctrl-c".into())
-        .spawn(move || loop {
-            unsafe {
-                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
-            }
+    let channel = builder.build()?;
+
+    thread::Builder::new().name("ctrl-c".into()).spawn(move || {
+        loop {
+            channel.recv().expect("receiving ctrl-c channel failed");
             user_handler();
-        })
-        .expect("failed to spawn thread");
+        }
+    }).expect("failed to spawn thread");
 
     Ok(())
 }
+
+#[cfg(feature="termination")]
+#[deprecated(note = "termination feature is deprecated and will go away in the next release")]
+/// Dummy function to inform users of feature "termination" that it will be deprecated
+pub fn termination_feature_deprecated() {}

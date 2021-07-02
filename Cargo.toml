@@ -17,7 +17,11 @@ readme = "README.md"
 nix = "0.20"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "winbase"] }
+winapi = { version = "0.3", features = ["consoleapi", "fileapi", "handleapi", "namedpipeapi", "synchapi", "winbase", "winerror"] }
+
+[dependencies]
+byteorder = "1.4"
+lazy_static = "1.4"
 
 [target.'cfg(windows)'.dev-dependencies]
 winapi = { version = "0.3", features = ["fileapi", "processenv", "winnt"] }

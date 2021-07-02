@@ -10,14 +10,30 @@
 use crate::platform;
 
 /// A cross-platform way to represent Ctrl-C or program termination signal. Other
-/// signals/events are supported via `Other`-variant.
-#[derive(Debug)]
+/// signals are supported via `Other`-variant.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SignalType {
     /// Ctrl-C
+    /// Maps to `SIGINT` on *nix, `CTRL_C_EVENT` on Windows.
     Ctrlc,
-    /// Program termination
-    /// Maps to `SIGTERM` on *nix, `CTRL_CLOSE_EVENT` on Windows.
-    Termination,
-    /// Other signal/event using platform-specific data
+    /// Other signal using platform-specific data
     Other(platform::Signal),
+}
+
+impl Into<platform::Signal> for SignalType {
+    fn into(self) -> platform::Signal {
+        match self {
+            SignalType::Ctrlc => platform::CTRL_C_SIGNAL,
+            SignalType::Other(s) => s,
+        }
+    }
+}
+
+impl From<platform::Signal> for SignalType {
+    fn from(platform_signal: platform::Signal) -> SignalType {
+        match platform_signal {
+            platform::CTRL_C_SIGNAL => SignalType::Ctrlc,
+            s => SignalType::Other(s),
+        }
+    }
 }

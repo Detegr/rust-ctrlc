@@ -4,6 +4,8 @@ use std::fmt;
 /// Ctrl-C error.
 #[derive(Debug)]
 pub enum Error {
+    /// Channel is empty
+    ChannelEmpty,
     /// Signal could not be found from the system.
     NoSuchSignal(crate::SignalType),
     /// Ctrl-C signal handler already registered.
@@ -11,10 +13,27 @@ pub enum Error {
     /// Unexpected system error.
     System(std::io::Error),
 }
+impl PartialEq for Error {
+    fn eq(&self, e: &Error) -> bool {
+        match (self, e) {
+            (&Error::ChannelEmpty, &Error::ChannelEmpty) => true,
+            (&Error::NoSuchSignal(ref lhs), &Error::NoSuchSignal(ref rhs)) => lhs == rhs,
+            (&Error::MultipleHandlers, &Error::MultipleHandlers) => true,
+            (&Error::System(ref lhs), &Error::System(ref rhs)) => {
+                if lhs.kind() != rhs.kind() {
+                    return false;
+                }
+                lhs.raw_os_error() == rhs.raw_os_error()
+            }
+            _ => false,
+        }
+    }
+}
 
 impl Error {
     fn describe(&self) -> &str {
         match *self {
+            Error::ChannelEmpty => "Channel is empty",
             Error::NoSuchSignal(_) => "Signal could not be found from the system",
             Error::MultipleHandlers => "Ctrl-C signal handler already registered",
             Error::System(_) => "Unexpected system error",

@@ -7,17 +7,16 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-pub mod channel;
-pub mod counter;
+extern crate ctrlc;
+use ctrlc::{Counter, SignalType};
+use std::thread;
+use std::time;
 
-#[cfg(unix)]
-mod unix;
-
-#[cfg(windows)]
-mod windows;
-
-#[cfg(unix)]
-pub use self::unix::*;
-
-#[cfg(windows)]
-pub use self::windows::*;
+fn main() {
+    let counter = Counter::new(SignalType::Ctrlc).unwrap();
+    println!("Waiting for Ctrl-C...");
+    while counter.get() == 0 {
+        thread::sleep(time::Duration::from_millis(10));
+    }
+    println!("Got it! Exiting...");
+}
