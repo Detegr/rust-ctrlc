@@ -44,7 +44,10 @@ impl WindowsChannel {
                 .index_of(platform_signal)
                 .expect("Validity of signal is checked earlier");
             let initialized = &SIGNALS.initialized[sig_index];
-            if initialized.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+            if initialized
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_err()
+            {
                 return Err(Error::MultipleHandlers);
             }
             unsafe {

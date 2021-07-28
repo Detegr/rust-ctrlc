@@ -103,13 +103,13 @@ where
     let mut builder = Channel::new_with_multiple();
     builder = builder.add_signal(SignalType::Ctrlc);
 
-    #[cfg(all(unix,feature="termination"))]
+    #[cfg(all(unix, feature = "termination"))]
     {
         termination_feature_deprecated();
         builder = builder.add_signal(SignalType::Other(platform::Signal::SIGTERM));
     }
 
-    #[cfg(all(windows, feature="termination"))]
+    #[cfg(all(windows, feature = "termination"))]
     {
         termination_feature_deprecated();
         builder = builder.add_signal(SignalType::Other(platform::Signal::CTRL_CLOSE_EVENT));
@@ -117,17 +117,18 @@ where
 
     let channel = builder.build()?;
 
-    thread::Builder::new().name("ctrl-c".into()).spawn(move || {
-        loop {
+    thread::Builder::new()
+        .name("ctrl-c".into())
+        .spawn(move || loop {
             channel.recv().expect("receiving ctrl-c channel failed");
             user_handler();
-        }
-    }).expect("failed to spawn thread");
+        })
+        .expect("failed to spawn thread");
 
     Ok(())
 }
 
-#[cfg(feature="termination")]
+#[cfg(feature = "termination")]
 #[deprecated(note = "termination feature is deprecated and will go away in the next release")]
 /// Dummy function to inform users of feature "termination" that it will be deprecated
 pub fn termination_feature_deprecated() {}

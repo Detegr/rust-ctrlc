@@ -318,9 +318,7 @@ fn test_invalid_counter() {
     // Create invalid signal
     let invalid_signal: Signal = unsafe { mem::transmute(12345) };
 
-    if let Err(Error::NoSuchSignal(sig)) =
-        Counter::new(SignalType::Other(invalid_signal))
-    {
+    if let Err(Error::NoSuchSignal(sig)) = Counter::new(SignalType::Other(invalid_signal)) {
         assert_eq!(sig, invalid_signal);
     } else {
         assert!(false);

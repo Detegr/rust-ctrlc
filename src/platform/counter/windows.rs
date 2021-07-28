@@ -13,9 +13,9 @@ use crate::signalmap::SIGNALS;
 use platform::winapi::um::consoleapi::SetConsoleCtrlHandler;
 use platform::windows::winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
 use platform::windows::Signal;
+use std::convert::TryFrom;
 use std::io;
 use std::sync::atomic::Ordering;
-use std::convert::TryFrom;
 
 unsafe extern "system" fn os_handler(event: DWORD) -> BOOL {
     if let Ok(signal) = Signal::try_from(event) {
@@ -32,7 +32,10 @@ pub fn set_handler(platform_signal: Signal) -> Result<(), Error> {
         .index_of(&platform_signal)
         .expect("Validity of signal is checked earlier");
     let initialized = &SIGNALS.initialized[sig_index];
-    if initialized.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+    if initialized
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
         return Err(Error::MultipleHandlers);
     }
     if unsafe { SetConsoleCtrlHandler(Some(os_handler), TRUE) } == FALSE {
