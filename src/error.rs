@@ -10,6 +10,8 @@ pub enum Error {
     NoSuchSignal(crate::Signal),
     /// Ctrl-C signal handler already registered.
     MultipleHandlers,
+    /// Too many signals registered for a channel.
+    TooManySignals,
     /// Unexpected system error.
     System(std::io::Error),
 }
@@ -36,6 +38,7 @@ impl Error {
             Error::ChannelEmpty => "Channel is empty",
             Error::NoSuchSignal(_) => "Signal could not be found from the system",
             Error::MultipleHandlers => "Ctrl-C signal handler already registered",
+            Error::TooManySignals => "Too many signals registered for a channel",
             Error::System(_) => "Unexpected system error",
         }
     }

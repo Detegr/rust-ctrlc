@@ -11,10 +11,10 @@ use platform::winapi::um::synchapi::WaitForMultipleObjects;
 use platform::winapi::um::winbase::{CreateSemaphoreA, INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
 use platform::winapi::um::winnt::MAXIMUM_WAIT_OBJECTS;
 use platform::Signal;
+use std::convert::TryFrom;
 use std::io;
 use std::ptr;
 use std::sync::atomic::Ordering;
-use std::convert::TryFrom;
 
 pub type ChannelType = WindowsChannel;
 
@@ -37,7 +37,7 @@ impl WindowsChannel {
         let signals = platform_signals.collect::<Vec<_>>();
         if signals.len() > (MAXIMUM_WAIT_OBJECTS as usize) {
             // TODO
-            return Err(Error::MultipleHandlers);
+            return Err(Error::TooManySignals);
         }
         for platform_signal in signals.iter() {
             let sig_index = SIGNALS
