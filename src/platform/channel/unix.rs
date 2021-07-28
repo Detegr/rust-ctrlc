@@ -90,7 +90,7 @@ impl UnixChannel {
             let timeout = if wait { Some(&mut zero) } else { None };
             match select(None, Some(&mut read_set), None, None, timeout) {
                 Ok(fds) => return Ok((fds, read_set)),
-                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {
+                Err(nix::errno::Errno::EINTR) => {
                     continue;
                 }
                 Err(e) => return Err(e.into()),
@@ -138,7 +138,7 @@ impl UnixChannel {
                             Ok(_) => {
                                 return Err(Error::System(io::ErrorKind::UnexpectedEof.into()))
                             }
-                            Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {}
+                            Err(nix::errno::Errno::EINTR) => {}
                             Err(e) => return Err(e.into()),
                         }
                     }
