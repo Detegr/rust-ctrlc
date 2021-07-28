@@ -7,7 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-extern crate ctrlc;
+use ctrlc;
 use ctrlc::{Channel, SignalType};
 
 fn main() {

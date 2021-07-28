@@ -7,9 +7,23 @@ A simple easy to use wrapper around Ctrl-C signal.
 [Documentation](http://detegr.github.io/doc/ctrlc/)
 
 # Example usage
+## Channel example
+
+```rust
+use ctrlc;
+use ctrlc::{Channel, SignalType};
+
+fn main() {
+    let channel = Channel::new(SignalType::Ctrlc).unwrap();
+    println!("Waiting for Ctrl-C...");
+    channel.recv().unwrap();
+    println!("Got it! Exiting...");
+}
+```
+
 ## Counter example
 ```rust
-extern crate ctrlc;
+use ctrlc;
 use ctrlc::{Counter, SignalType};
 use std::thread;
 use std::time;
@@ -23,23 +37,30 @@ fn main() {
     println!("Got it! Exiting...");
 }
 ```
-## Channel example
 
+## Handling multiple signals
 ```rust
-extern crate ctrlc;
-use ctrlc::{Channel, SignalType};
+use ctrlc;
+use ctrlc::{Channel, Signal, SignalType};
 
 fn main() {
-    let channel = Channel::new(SignalType::Ctrlc).unwrap();
-    println!("Waiting for Ctrl-C...");
+    let channel = Channel::new_with_multiple()
+        .add_signal(SignalType::Ctrlc)
+        .add_signal(SignalType::Other(
+            #[cfg(unix)] { Signal::SIGTERM },
+            #[cfg(windows)] { Signal::CTRL_BREAK_EVENT },
+        ))
+        .build()
+        .unwrap();
+    println!("Waiting for signal...");
     channel.recv().unwrap();
     println!("Got it! Exiting...");
 }
 ```
 
 #### Try the examples yourself
-`cargo run --example counter_example`
 `cargo run --example channel_example`
+`cargo run --example counter_example`
 
 ## License
 
