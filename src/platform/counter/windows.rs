@@ -17,6 +17,7 @@ use std::convert::TryFrom;
 use std::io;
 use std::sync::atomic::Ordering;
 
+// SAFETY: FFI
 unsafe extern "system" fn os_handler(event: DWORD) -> BOOL {
     if let Ok(signal) = Signal::try_from(event) {
         let counter = SIGNALS.get_counter(&signal);
@@ -38,6 +39,7 @@ pub fn set_handler(platform_signal: Signal) -> Result<(), Error> {
     {
         return Err(Error::MultipleHandlers);
     }
+    // SAFETY: FFI
     if unsafe { SetConsoleCtrlHandler(Some(os_handler), TRUE) } == FALSE {
         let e = io::Error::last_os_error();
         return Err(e.into());
@@ -50,6 +52,7 @@ pub fn reset_handler(platform_signal: Signal) {
         .index_of(&platform_signal)
         .expect("Validity of signal is checked earlier");
     let initialized = &SIGNALS.initialized[sig_index];
+    // SAFETY: FFI
     if unsafe { SetConsoleCtrlHandler(Some(os_handler), FALSE) } == FALSE {
         unreachable!("Should not fail");
     }

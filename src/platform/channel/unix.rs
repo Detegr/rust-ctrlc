@@ -12,6 +12,7 @@ use self::nix::sys::signal as nix_signal;
 use self::nix::sys::time::{TimeVal, TimeValLike};
 use self::nix::unistd;
 use crate::error::Error;
+use crate::platform;
 use crate::platform::unix::nix::sys::signal::Signal;
 use crate::platform::unix::{nix, utils};
 use crate::signal::SignalType;
@@ -42,43 +43,36 @@ impl UnixChannel {
 
         let signals = platform_signals.collect::<Vec<_>>();
         for platform_signal in signals.iter() {
-            unsafe {
-                if !SIGNALS.has_emitter(&platform_signal) {
-                    let pipe = utils::pipe2(fcntl::OFlag::O_CLOEXEC)?;
-                    let close_pipe = |e: nix::Error| -> Error {
-                        let _ = unistd::close(pipe.1);
-                        let _ = unistd::close(pipe.0);
-                        e.into()
-                    };
+            let pipe = utils::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+            let close_pipe = |e: nix::Error| -> Error {
+                let _ = unistd::close(pipe.1);
+                let _ = unistd::close(pipe.0);
+                e.into()
+            };
 
-                    // Make sure we never block on write in the os handler.
-                    if let Err(e) =
-                        fcntl::fcntl(pipe.1, fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK))
-                    {
-                        return Err(close_pipe(e));
-                    }
-
-                    let pipes = SIGNALS.get_emitter_mut(&platform_signal).unwrap();
-                    pipes.0 = pipe.0;
-                    pipes.1 = pipe.1;
-                }
-
-                let handler = signal::SigHandler::Handler(UnixChannel::os_handler);
-                let new_action = signal::SigAction::new(
-                    handler,
-                    signal::SaFlags::SA_RESTART,
-                    signal::SigSet::empty(),
-                );
-
-                match signal::sigaction(*platform_signal, &new_action) {
-                    Ok(old) => {
-                        if old.handler() != nix_signal::SigHandler::SigDfl {
-                            return Err(Error::MultipleHandlers);
-                        }
-                    }
-                    Err(e) => return Err(e.into()),
-                }
+            // Make sure we never block on write in the os handler.
+            if let Err(e) = fcntl::fcntl(pipe.1, fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK))
+            {
+                return Err(close_pipe(e));
             }
+
+            let handler = signal::SigHandler::Handler(UnixChannel::os_handler);
+            let new_action = signal::SigAction::new(
+                handler,
+                signal::SaFlags::SA_RESTART,
+                signal::SigSet::empty(),
+            );
+
+            // SAFETY: FFI
+            let old = unsafe { signal::sigaction(*platform_signal, &new_action)? };
+            if old.handler() != nix_signal::SigHandler::SigDfl {
+                platform::revert_sighandler_to_default(*platform_signal);
+                return Err(Error::MultipleHandlers);
+            }
+
+            let pipes = SIGNALS.get_emitter_mut(&platform_signal).unwrap();
+            pipes.0 = pipe.0;
+            pipes.1 = pipe.1;
         }
         Ok(UnixChannel {
             platform_signals: signals.into_boxed_slice(),
@@ -158,13 +152,15 @@ impl UnixChannel {
 impl Drop for UnixChannel {
     /// Dropping the channel unregisters the signal handlers attached to the channel.
     fn drop(&mut self) {
-        let new_action = nix_signal::SigAction::new(
-            nix_signal::SigHandler::SigDfl,
-            nix_signal::SaFlags::empty(),
-            nix_signal::SigSet::empty(),
-        );
-        for sig in self.platform_signals.iter() {
-            let _old = unsafe { nix_signal::sigaction(*sig, &new_action) };
+        for platform_signal in self.platform_signals.iter() {
+            let emitter = SIGNALS
+                .get_emitter(&platform_signal)
+                .expect("Emitter for the signal must exist");
+
+            let _ = unistd::close(emitter.1);
+            let _ = unistd::close(emitter.0);
+
+            platform::revert_sighandler_to_default(*platform_signal);
         }
     }
 }

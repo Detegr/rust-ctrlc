@@ -255,6 +255,12 @@ fn test_set_multiple_handlers() {
     drop(counter1);
     let counter3 = ctrlc::Counter::new(ctrlc::SignalType::Ctrlc);
     assert!(counter3.is_ok());
+
+    let channel1 = ctrlc::Channel::new(ctrlc::SignalType::Ctrlc);
+    assert!(channel1.is_err());
+    drop(counter3);
+    let channel2 = ctrlc::Channel::new(ctrlc::SignalType::Ctrlc);
+    assert!(channel2.is_ok());
 }
 
 fn test_counter() {

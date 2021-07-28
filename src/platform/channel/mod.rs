@@ -118,8 +118,12 @@ impl Channel {
     }
 }
 
+// SAFETY: This would be Send + Sync automatically, but we want to prevent Sync by
+// adding *const () which also unimplements Send. So while Send is still sound for this
+// struct as the const pointer is just for unimplementing Sync, we can use unsafe impl
+// to implement Send for this again.
 unsafe impl Send for Channel {}
 
 // When negative trait bounds are stabilized, this can be used
 // instead of _prevent_sync field.
-//unsafe impl !Sync for Channel {}
+//impl !Sync for Channel {}

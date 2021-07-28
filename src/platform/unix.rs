@@ -8,7 +8,7 @@
 
 pub use nix;
 
-use self::nix::sys::signal::Signal as nix_signal;
+use self::nix::sys::signal as nix_signal;
 use self::nix::unistd;
 use crate::signal::SignalType;
 use crate::signalevent::SignalEvent;
@@ -32,7 +32,7 @@ impl SignalEvent for SignalEmitter {
     }
 }
 
-pub const CTRL_C_SIGNAL: Signal = nix_signal::SIGINT;
+pub const CTRL_C_SIGNAL: Signal = nix_signal::Signal::SIGINT;
 pub const UNINITIALIZED_SIGNAL_EMITTER: (RawFd, RawFd) = (-1, -1);
 
 /// Iterator returning available signals on this system
@@ -44,7 +44,7 @@ impl SignalType {
     /// Get the underlying platform specific signal
     pub fn to_platform_signal(&self) -> Signal {
         match *self {
-            SignalType::Ctrlc => nix_signal::SIGINT,
+            SignalType::Ctrlc => nix_signal::Signal::SIGINT,
             SignalType::Other(s) => s,
         }
     }
@@ -90,4 +90,14 @@ pub mod utils {
     pub fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
         unistd::pipe2(flags)
     }
+}
+
+pub fn revert_sighandler_to_default(signal: Signal) {
+    let new_action = nix_signal::SigAction::new(
+        nix_signal::SigHandler::SigDfl,
+        nix_signal::SaFlags::empty(),
+        nix_signal::SigSet::empty(),
+    );
+    // SAFETY: FFI
+    let _old = unsafe { nix_signal::sigaction(signal, &new_action).expect("Arguments are valid") };
 }

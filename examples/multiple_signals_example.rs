@@ -5,8 +5,14 @@ fn main() {
     let channel = Channel::new_with_multiple()
         .add_signal(SignalType::Ctrlc)
         .add_signal(SignalType::Other(
-            #[cfg(unix)] { Signal::SIGTERM },
-            #[cfg(windows)] { Signal::CTRL_BREAK_EVENT },
+            #[cfg(unix)]
+            {
+                Signal::SIGTERM
+            },
+            #[cfg(windows)]
+            {
+                Signal::CTRL_BREAK_EVENT
+            },
         ))
         .build()
         .unwrap();

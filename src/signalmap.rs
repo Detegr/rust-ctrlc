@@ -7,11 +7,10 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-#[cfg(windows)]
-use std::sync::atomic::AtomicBool;
-
 use crate::platform::{SignalEmitter, UNINITIALIZED_SIGNAL_EMITTER};
 use std::cell::UnsafeCell;
+#[cfg(windows)]
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 
 pub struct SignalMap<T> {
@@ -21,7 +20,20 @@ pub struct SignalMap<T> {
     #[cfg(windows)]
     pub initialized: Box<[AtomicBool]>,
 }
+
+// SAFETY: The only time we modify the value of UnsafeCells in `emitters`
+// are done in a way that no two threads can modify the value at the same time.
+// Before acquiring a mutable reference to the UnsafeCell, it is checked that the signal in
+// question has not been handled yet (so its emitter has not been touched). On Unix systems,
+// this is done via calling sigaction and making sure the old value matches the default sigaction.
+// On Windows, an atomic boolean is set for each signal separately (see `initialized` member of
+// this struct).
+//
+// In other words: Implementing Sync for SignalMap<T> is wrong in Rust's type checking perspective,
+// as there is a possibility for a data race with wrong usage.
+// The usage of this struct is done so that those data races do not exist within this crate.
 unsafe impl<T> Sync for SignalMap<T> {}
+
 impl<T> SignalMap<T>
 where
     T: PartialEq,
@@ -45,21 +57,23 @@ where
         self.signals
             .iter()
             .zip(self.emitters.iter())
-            .find(|&(sig, _)| sig == signal)
-            .map(|sigmap| unsafe { &mut *sigmap.1.get() })
+            .find(|(sig, _)| *sig == signal)
+            .map(|sigmap| {
+                // SAFETY: Old value of sigaction (Unix)
+                // SignalMap::initialized (Windows)
+                // See explanation for unsafe impl Sync
+                unsafe { &mut *sigmap.1.get() }
+            })
     }
     pub fn get_emitter(&self, signal: &T) -> Option<&SignalEmitter> {
         self.signals
             .iter()
             .zip(self.emitters.iter())
             .find(|&(sig, _)| sig == signal)
+            // SAFETY: Old value of sigaction (Unix)
+            // SignalMap::initialized (Windows)
+            // See explanation for unsafe impl Sync
             .map(|sigmap| unsafe { &*sigmap.1.get() })
-    }
-    pub fn has_emitter(&self, signal: &T) -> bool {
-        match self.get_emitter(signal) {
-            Some(emitter) => *emitter != UNINITIALIZED_SIGNAL_EMITTER,
-            None => false,
-        }
     }
     #[cfg(windows)]
     pub fn index_of(&self, signal: &T) -> Option<usize> {
@@ -84,6 +98,7 @@ lazy_static! {
             .into_iter()
             .map(|_| UnsafeCell::new(UNINITIALIZED_SIGNAL_EMITTER))
             .collect::<Vec<_>>();
+
         #[cfg(unix)]
         {
             SignalMap {
@@ -92,7 +107,6 @@ lazy_static! {
                 emitters: emitters.into_boxed_slice(),
             }
         }
-
         #[cfg(windows)]
         {
             let initialized = signals

@@ -9,6 +9,7 @@
 
 use self::nix::sys::signal as nix_signal;
 use crate::error::Error;
+use crate::platform;
 use crate::platform::unix::nix;
 use crate::platform::unix::Signal;
 use crate::signalmap::SIGNALS;
@@ -31,18 +32,15 @@ pub fn set_handler(platform_signal: Signal) -> Result<(), Error> {
         nix_signal::SaFlags::SA_RESTART,
         nix_signal::SigSet::empty(),
     );
+    // SAFETY: FFI
     let old = unsafe { nix_signal::sigaction(platform_signal, &new_action)? };
     if old.handler() != nix_signal::SigHandler::SigDfl {
+        platform::revert_sighandler_to_default(platform_signal);
         return Err(Error::MultipleHandlers);
     }
     Ok(())
 }
 
-pub fn reset_handler(signal: Signal) {
-    let new_action = nix_signal::SigAction::new(
-        nix_signal::SigHandler::SigDfl,
-        nix_signal::SaFlags::empty(),
-        nix_signal::SigSet::empty(),
-    );
-    let _old = unsafe { nix_signal::sigaction(signal, &new_action) };
+pub fn reset_handler(platform_signal: Signal) {
+    platform::revert_sighandler_to_default(platform_signal);
 }

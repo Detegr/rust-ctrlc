@@ -59,6 +59,7 @@ impl TryFrom<DWORD> for Signal {
 pub type SignalEmitter = HANDLE;
 impl SignalEvent for SignalEmitter {
     fn emit(&self, _signal: &Signal) {
+        // SAFETY: FFI
         unsafe { ReleaseSemaphore(*self, 1, ptr::null_mut()) };
     }
 }

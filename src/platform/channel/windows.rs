@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering;
 
 pub type ChannelType = WindowsChannel;
 
+// SAFETY: FFI
 unsafe extern "system" fn os_handler(event: DWORD) -> BOOL {
     if let Ok(signal) = Signal::try_from(event) {
         let emitter = SIGNALS.get_emitter(&signal);
@@ -43,27 +44,31 @@ impl WindowsChannel {
                 .index_of(platform_signal)
                 .expect("Validity of signal is checked earlier");
             let initialized = &SIGNALS.initialized[sig_index];
+
+            // SAFETY: Atomically set initialized[sig_index] = true before acquiring a mutable
+            // reference to the signal emitter data within a UnsafeCell
             if initialized
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .is_err()
             {
                 return Err(Error::MultipleHandlers);
             }
-            unsafe {
-                if !SIGNALS.has_emitter(platform_signal) {
-                    let sem =
-                        CreateSemaphoreA(ptr::null_mut(), 0, platform::MAX_SEM_COUNT, ptr::null());
-                    if sem.is_null() {
-                        let e = io::Error::last_os_error();
-                        return Err(e.into());
-                    }
 
-                    let emitter = SIGNALS.get_emitter_mut(platform_signal).unwrap();
-                    *emitter = sem;
-                }
-                if SetConsoleCtrlHandler(Some(os_handler), TRUE) == FALSE {
-                    return Err(io::Error::last_os_error().into());
-                }
+            // SAFETY: FFI
+            let sem = unsafe {
+                CreateSemaphoreA(ptr::null_mut(), 0, platform::MAX_SEM_COUNT, ptr::null())
+            };
+            if sem.is_null() {
+                let e = io::Error::last_os_error();
+                return Err(e.into());
+            }
+
+            let emitter = SIGNALS.get_emitter_mut(platform_signal).unwrap();
+            *emitter = sem;
+
+            // SAFETY: FFI
+            if unsafe { SetConsoleCtrlHandler(Some(os_handler), TRUE) } == FALSE {
+                return Err(io::Error::last_os_error().into());
             }
         }
         Ok(WindowsChannel {
@@ -91,6 +96,8 @@ impl WindowsChannel {
         }
         let num_of_handles = event_handles.len() as DWORD; // Only MAXIMUM_WAIT_OBJECTS (64) handles are supported, so this fits to u32
         let wait_time = if wait { INFINITE } else { 0 };
+
+        // SAFETY: FFI
         let i = unsafe {
             WaitForMultipleObjects(num_of_handles, *event_handles.as_ptr(), FALSE, wait_time)
         };
@@ -118,14 +125,18 @@ impl Drop for WindowsChannel {
                 .index_of(sig)
                 .expect("Validity of signal is checked earlier");
             let initialized = &SIGNALS.initialized[sig_index];
-            for emitter in SIGNALS.get_emitter_mut(&sig) {
-                unsafe {
-                    if CloseHandle(*emitter) == FALSE {
-                        unreachable!("Should not fail");
-                    }
-                }
-                *emitter = platform::UNINITIALIZED_SIGNAL_EMITTER;
-            }
+            let emitter = SIGNALS
+                .get_emitter(&sig)
+                .expect("Emitter for the signal must exist");
+
+            // SAFETY: FFI
+            unsafe { CloseHandle(*emitter) };
+
+            // SAFETY: We don't want to hold onto the reference within UnsafeCell while
+            // setting the `initialized` value back to false.
+            drop(emitter);
+
+            // SAFETY: FFI
             if unsafe { SetConsoleCtrlHandler(Some(os_handler), FALSE) } == FALSE {
                 unreachable!("Should not fail");
             }
