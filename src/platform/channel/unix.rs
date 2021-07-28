@@ -17,7 +17,7 @@ use crate::platform::unix::nix::sys::signal::Signal;
 use crate::platform::unix::{nix, utils};
 use crate::signal::SignalType;
 use crate::signalevent::SignalEvent;
-use crate::signalmap::SIGNALS;
+use crate::signalmap::SIGMAP;
 use byteorder::{ByteOrder, LittleEndian};
 use std::convert::TryFrom;
 use std::io;
@@ -31,7 +31,7 @@ impl UnixChannel {
     extern "C" fn os_handler(signum: nix::libc::c_int) {
         let signal = Signal::try_from(signum).ok();
         if let Some(signal) = signal {
-            let pipes = SIGNALS.get_emitter(&signal);
+            let pipes = SIGMAP.get_emitter(&signal);
             if let Some(pipes) = pipes {
                 pipes.emit(&signal);
             }
@@ -70,7 +70,7 @@ impl UnixChannel {
                 return Err(Error::MultipleHandlers);
             }
 
-            let pipes = SIGNALS.get_emitter_mut(&platform_signal).unwrap();
+            let pipes = SIGMAP.get_emitter_mut(&platform_signal).unwrap();
             pipes.0 = pipe.0;
             pipes.1 = pipe.1;
         }
@@ -95,7 +95,7 @@ impl UnixChannel {
         let mut read_set = FdSet::new();
         let mut pipe_handles = vec![];
         for sig in self.platform_signals.iter() {
-            match SIGNALS.get_emitter(sig) {
+            match SIGMAP.get_emitter(sig) {
                 None => {
                     return Err(Error::NoSuchSignal((*sig).into()));
                 }
@@ -153,7 +153,7 @@ impl Drop for UnixChannel {
     /// Dropping the channel unregisters the signal handlers attached to the channel.
     fn drop(&mut self) {
         for platform_signal in self.platform_signals.iter() {
-            let emitter = SIGNALS
+            let emitter = SIGMAP
                 .get_emitter(&platform_signal)
                 .expect("Emitter for the signal must exist");
 

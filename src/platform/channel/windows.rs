@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::platform;
 use crate::signalevent::SignalEvent;
-use crate::signalmap::SIGNALS;
+use crate::signalmap::SIGMAP;
 use crate::SignalType;
 use platform::winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
 use platform::winapi::shared::winerror::WAIT_TIMEOUT;
@@ -21,7 +21,7 @@ pub type ChannelType = WindowsChannel;
 // SAFETY: FFI
 unsafe extern "system" fn os_handler(event: DWORD) -> BOOL {
     if let Ok(signal) = Signal::try_from(event) {
-        let emitter = SIGNALS.get_emitter(&signal);
+        let emitter = SIGMAP.get_emitter(&signal);
         if let Some(emitter) = emitter {
             emitter.emit(&signal);
         }
@@ -40,10 +40,10 @@ impl WindowsChannel {
             return Err(Error::TooManySignals);
         }
         for platform_signal in signals.iter() {
-            let sig_index = SIGNALS
+            let sig_index = SIGMAP
                 .index_of(platform_signal)
                 .expect("Validity of signal is checked earlier");
-            let initialized = &SIGNALS.initialized[sig_index];
+            let initialized = &SIGMAP.initialized[sig_index];
 
             // SAFETY: Atomically set initialized[sig_index] = true before acquiring a mutable
             // reference to the signal emitter data within a UnsafeCell
@@ -63,7 +63,7 @@ impl WindowsChannel {
                 return Err(e.into());
             }
 
-            let emitter = SIGNALS.get_emitter_mut(platform_signal).unwrap();
+            let emitter = SIGMAP.get_emitter_mut(platform_signal).unwrap();
             *emitter = sem;
 
             // SAFETY: FFI
@@ -87,7 +87,7 @@ impl WindowsChannel {
     fn recv_inner(&self, wait: bool) -> Result<SignalType, Error> {
         let mut event_handles = vec![];
         for sig in self.platform_signals.iter() {
-            match SIGNALS.get_emitter(sig) {
+            match SIGMAP.get_emitter(sig) {
                 None => {
                     return Err(Error::NoSuchSignal((*sig).into()));
                 }
@@ -103,7 +103,7 @@ impl WindowsChannel {
         };
         let some_ready = i < (WAIT_OBJECT_0 + num_of_handles);
         if some_ready {
-            SIGNALS
+            SIGMAP
                 .get_signal(event_handles[i as usize])
                 .map(|sig| (*sig).into())
                 .ok_or_else(|| Error::NoSuchSignal(Signal::try_from(i).unwrap()))
@@ -121,11 +121,11 @@ impl Drop for WindowsChannel {
     /// Dropping the channel unregisters the signal handlers attached to the channel.
     fn drop(&mut self) {
         for sig in self.platform_signals.iter() {
-            let sig_index = SIGNALS
+            let sig_index = SIGMAP
                 .index_of(sig)
                 .expect("Validity of signal is checked earlier");
-            let initialized = &SIGNALS.initialized[sig_index];
-            let emitter = SIGNALS
+            let initialized = &SIGMAP.initialized[sig_index];
+            let emitter = SIGMAP
                 .get_emitter(&sig)
                 .expect("Emitter for the signal must exist");
 

@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::signal::SignalType;
-use crate::signalmap::SIGNALS;
+use crate::signalmap::SIGMAP;
 
 #[cfg(unix)]
 mod unix;
@@ -47,7 +47,7 @@ impl Counter {
     pub fn new(signal: SignalType) -> Result<Counter, Error> {
         let platform_signal = signal.into();
 
-        if !SIGNALS.signals.iter().any(|&s| platform_signal == s) {
+        if !SIGMAP.signals.iter().any(|&s| platform_signal == s) {
             return Err(Error::NoSuchSignal(platform_signal));
         }
 
@@ -66,7 +66,7 @@ impl Counter {
     /// variable, so the counter may or may not have changed during the time this function returns.
     pub fn get(&self) -> usize {
         use std::sync::atomic::Ordering;
-        SIGNALS
+        SIGMAP
             .get_counter(&self.signal)
             .unwrap()
             .load(Ordering::Acquire)

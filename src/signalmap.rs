@@ -86,7 +86,7 @@ where
 }
 
 lazy_static! {
-    pub static ref SIGNALS: SignalMap<crate::platform::Signal> = {
+    pub static ref SIGMAP: SignalMap<crate::platform::Signal> = {
         let signals = crate::platform::signal_iterator().collect::<Vec<_>>();
         let counters = signals
             .clone()

@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::signal::SignalType;
-use crate::signalmap::SIGNALS;
+use crate::signalmap::SIGMAP;
 
 #[cfg(unix)]
 mod unix;
@@ -92,7 +92,7 @@ impl Channel {
     fn new_from_multiple(signals: &[SignalType]) -> Result<Channel, Error> {
         for signal in signals {
             let platform_signal: crate::platform::Signal = (*signal).into();
-            if !SIGNALS.signals.iter().any(|&s| platform_signal == s) {
+            if !SIGMAP.signals.iter().any(|&s| platform_signal == s) {
                 return Err(Error::NoSuchSignal(platform_signal));
             }
         }

@@ -12,14 +12,14 @@ use crate::error::Error;
 use crate::platform;
 use crate::platform::unix::nix;
 use crate::platform::unix::Signal;
-use crate::signalmap::SIGNALS;
+use crate::signalmap::SIGMAP;
 use std::convert::TryFrom;
 
 extern "C" fn os_handler(signum: nix::libc::c_int) {
     use std::sync::atomic::Ordering;
     let counter = Signal::try_from(signum)
         .ok()
-        .and_then(|signal| SIGNALS.get_counter(&signal));
+        .and_then(|signal| SIGMAP.get_counter(&signal));
     if let Some(counter) = counter {
         counter.fetch_add(1, Ordering::AcqRel);
     }
