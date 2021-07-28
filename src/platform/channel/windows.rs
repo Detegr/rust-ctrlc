@@ -36,7 +36,6 @@ impl WindowsChannel {
     pub fn new(platform_signals: impl Iterator<Item = Signal>) -> Result<WindowsChannel, Error> {
         let signals = platform_signals.collect::<Vec<_>>();
         if signals.len() > (MAXIMUM_WAIT_OBJECTS as usize) {
-            // TODO
             return Err(Error::TooManySignals);
         }
         for platform_signal in signals.iter() {

@@ -21,7 +21,7 @@ pub type Error = nix::Error;
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
 
-/// TODO Platform specific pipe handle type
+/// Platform specific signal emitter type
 pub type SignalEmitter = (RawFd, RawFd);
 impl SignalEvent for SignalEmitter {
     fn emit(&self, signal: &Signal) {

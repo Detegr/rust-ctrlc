@@ -55,7 +55,7 @@ impl TryFrom<DWORD> for Signal {
     }
 }
 
-/// TODO Platform specific pipe handle type
+/// Platform specific signal emitter type
 pub type SignalEmitter = HANDLE;
 impl SignalEvent for SignalEmitter {
     fn emit(&self, _signal: &Signal) {
