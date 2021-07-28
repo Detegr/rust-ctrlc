@@ -48,7 +48,7 @@ impl Counter {
         let platform_signal = signal.into();
 
         if !SIGNALS.signals.iter().any(|&s| platform_signal == s) {
-            return Err(Error::NoSuchSignal(signal));
+            return Err(Error::NoSuchSignal(platform_signal));
         }
 
         set_handler(platform_signal)?;

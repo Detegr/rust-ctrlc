@@ -11,15 +11,18 @@ use crate::error::Error;
 use crate::platform;
 use crate::signalmap::SIGNALS;
 use platform::winapi::um::consoleapi::SetConsoleCtrlHandler;
-use platform::windows::Signal;
 use platform::windows::winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
+use platform::windows::Signal;
 use std::io;
 use std::sync::atomic::Ordering;
+use std::convert::TryFrom;
 
 unsafe extern "system" fn os_handler(event: DWORD) -> BOOL {
-    let counter = SIGNALS.get_counter(&event);
-    if let Some(counter) = counter {
-        counter.fetch_add(1, Ordering::AcqRel);
+    if let Ok(signal) = Signal::try_from(event) {
+        let counter = SIGNALS.get_counter(&signal);
+        if let Some(counter) = counter {
+            counter.fetch_add(1, Ordering::AcqRel);
+        }
     }
     TRUE
 }

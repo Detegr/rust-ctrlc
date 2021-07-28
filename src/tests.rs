@@ -258,7 +258,7 @@ fn test_set_multiple_handlers() {
 }
 
 fn test_counter() {
-    use ctrlc::{Counter, SignalType};
+    use ctrlc::{Counter, Signal, SignalType};
 
     fn test_counter_with(counter: Counter, raise_function: unsafe fn()) {
         use std::thread;
@@ -296,11 +296,17 @@ fn test_counter() {
     let c = Counter::new(ctrlc::SignalType::Ctrlc).unwrap();
     test_counter_with(c, platform::raise_ctrl_c as unsafe fn());
 
-
     let c = Counter::new(SignalType::Other(
-        #[cfg(unix)] { ctrlc::Signal::SIGTERM },
-        #[cfg(windows)] { winapi::um::wincon::CTRL_BREAK_EVENT },
-    )).unwrap();
+        #[cfg(unix)]
+        {
+            Signal::SIGTERM
+        },
+        #[cfg(windows)]
+        {
+            Signal::CTRL_BREAK_EVENT
+        },
+    ))
+    .unwrap();
 
     test_counter_with(c, platform::raise_termination as unsafe fn());
 }
@@ -312,7 +318,7 @@ fn test_invalid_counter() {
     // Create invalid signal
     let invalid_signal: Signal = unsafe { mem::transmute(12345) };
 
-    if let Err(Error::NoSuchSignal(SignalType::Other(sig))) =
+    if let Err(Error::NoSuchSignal(sig)) =
         Counter::new(SignalType::Other(invalid_signal))
     {
         assert_eq!(sig, invalid_signal);
@@ -322,7 +328,7 @@ fn test_invalid_counter() {
 }
 
 fn test_channel() {
-    use ctrlc::{Channel, SignalType};
+    use ctrlc::{Channel, Signal, SignalType};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread;
@@ -332,8 +338,14 @@ fn test_channel() {
     let flag2 = flag.clone();
     let channel = Channel::new(SignalType::Ctrlc).unwrap();
     let termination_signal = SignalType::Other(
-        #[cfg(unix)] { ctrlc::Signal::SIGTERM },
-        #[cfg(windows)] { winapi::um::wincon::CTRL_BREAK_EVENT },
+        #[cfg(unix)]
+        {
+            Signal::SIGTERM
+        },
+        #[cfg(windows)]
+        {
+            Signal::CTRL_BREAK_EVENT
+        },
     );
     let termination_channel = Channel::new(termination_signal).unwrap();
 
@@ -367,15 +379,21 @@ fn test_channel() {
 }
 
 fn test_channel_multiple_signals() {
-    use ctrlc::{Channel, SignalType};
+    use ctrlc::{Channel, Signal, SignalType};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
     let termination_signal = SignalType::Other(
-        #[cfg(unix)] { ctrlc::Signal::SIGTERM },
-        #[cfg(windows)] { winapi::um::wincon::CTRL_BREAK_EVENT },
+        #[cfg(unix)]
+        {
+            Signal::SIGTERM
+        },
+        #[cfg(windows)]
+        {
+            Signal::CTRL_BREAK_EVENT
+        },
     );
 
     let flag = Arc::new(AtomicBool::new(false));

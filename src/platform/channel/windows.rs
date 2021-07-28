@@ -1,9 +1,8 @@
-use crate::SignalType;
 use crate::error::Error;
 use crate::platform;
 use crate::signalevent::SignalEvent;
 use crate::signalmap::SIGNALS;
-use platform::Signal;
+use crate::SignalType;
 use platform::winapi::shared::minwindef::{BOOL, DWORD, FALSE, TRUE};
 use platform::winapi::shared::winerror::WAIT_TIMEOUT;
 use platform::winapi::um::consoleapi::SetConsoleCtrlHandler;
@@ -11,16 +10,20 @@ use platform::winapi::um::handleapi::CloseHandle;
 use platform::winapi::um::synchapi::WaitForMultipleObjects;
 use platform::winapi::um::winbase::{CreateSemaphoreA, INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
 use platform::winapi::um::winnt::MAXIMUM_WAIT_OBJECTS;
+use platform::Signal;
 use std::io;
 use std::ptr;
 use std::sync::atomic::Ordering;
+use std::convert::TryFrom;
 
 pub type ChannelType = WindowsChannel;
 
 unsafe extern "system" fn os_handler(event: DWORD) -> BOOL {
-    let emitter = SIGNALS.get_emitter(&event);
-    if let Some(emitter) = emitter {
-        emitter.emit(&event);
+    if let Ok(signal) = Signal::try_from(event) {
+        let emitter = SIGNALS.get_emitter(&signal);
+        if let Some(emitter) = emitter {
+            emitter.emit(&signal);
+        }
     }
     TRUE
 }
@@ -94,7 +97,7 @@ impl WindowsChannel {
             SIGNALS
                 .get_signal(event_handles[i as usize])
                 .map(|sig| (*sig).into())
-                .ok_or_else(|| Error::NoSuchSignal(i.into()))
+                .ok_or_else(|| Error::NoSuchSignal(Signal::try_from(i).unwrap()))
         } else if i == WAIT_FAILED {
             let e = io::Error::last_os_error();
             return Err(e.into());

@@ -15,7 +15,7 @@ use self::windows::*;
 /// Builder for `Channel` allowing to specify more than one signal.
 /// # Example
 /// ```no_run
-/// use ctrlc::{Channel, SignalType, Signal};
+/// use ctrlc::{Channel, Signal, SignalType};
 ///
 /// fn main() {
 ///     let channel = Channel::new_with_multiple()
@@ -93,7 +93,7 @@ impl Channel {
         for signal in signals {
             let platform_signal: crate::platform::Signal = (*signal).into();
             if !SIGNALS.signals.iter().any(|&s| platform_signal == s) {
-                return Err(Error::NoSuchSignal(*signal));
+                return Err(Error::NoSuchSignal(platform_signal));
             }
         }
 

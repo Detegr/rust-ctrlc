@@ -11,20 +11,49 @@ pub use winapi;
 
 use crate::signal::SignalType;
 use crate::signalevent::SignalEvent;
+use std::convert::TryFrom;
 use std::io;
-use std::ops::Range;
 use std::ptr;
 use winapi::ctypes::c_long;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::ntdef::HANDLE;
 use winapi::um::synchapi::ReleaseSemaphore;
-use winapi::um::wincon::{CTRL_C_EVENT, CTRL_SHUTDOWN_EVENT};
+use winapi::um::wincon;
 
 /// Platform specific error type
 pub type Error = io::Error;
 
-/// Platform specific signal type
-pub type Signal = DWORD;
+#[allow(non_camel_case_types)]
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Wrapper enum for winapi's CTRL events
+pub enum Signal {
+    /// Variant for [CTRL_C_EVENT](../winapi/um/wincon/constant.CTRL_C_EVENT.html)
+    CTRL_C_EVENT = wincon::CTRL_C_EVENT,
+    /// Variant for [CTRL_BREAK_EVENT](../winapi/um/wincon/constant.CTRL_BREAK_EVENT.html)
+    CTRL_BREAK_EVENT = wincon::CTRL_BREAK_EVENT,
+    /// Variant for [CTRL_CLOSE_EVENT](../winapi/um/wincon/constant.CTRL_CLOSE_EVENT.html)
+    CTRL_CLOSE_EVENT = wincon::CTRL_CLOSE_EVENT,
+    /// Variant for [CTRL_LOGOFF_EVENT](../winapi/um/wincon/constant.CTRL_LOGOFF_EVENT.html)
+    CTRL_LOGOFF_EVENT = wincon::CTRL_LOGOFF_EVENT,
+    /// Variant for [CTRL_SHUTDOWN_EVENT](../winapi/um/wincon/constant.CTRL_SHUTDOWN_EVENT.html)
+    CTRL_SHUTDOWN_EVENT = wincon::CTRL_SHUTDOWN_EVENT,
+}
+
+impl TryFrom<DWORD> for Signal {
+    type Error = ();
+
+    fn try_from(event: DWORD) -> Result<Self, Self::Error> {
+        match event {
+            wincon::CTRL_C_EVENT => Ok(Signal::CTRL_C_EVENT),
+            wincon::CTRL_BREAK_EVENT => Ok(Signal::CTRL_BREAK_EVENT),
+            wincon::CTRL_CLOSE_EVENT => Ok(Signal::CTRL_CLOSE_EVENT),
+            wincon::CTRL_LOGOFF_EVENT => Ok(Signal::CTRL_LOGOFF_EVENT),
+            wincon::CTRL_SHUTDOWN_EVENT => Ok(Signal::CTRL_SHUTDOWN_EVENT),
+            _ => Err(()),
+        }
+    }
+}
 
 /// TODO Platform specific pipe handle type
 pub type SignalEmitter = HANDLE;
@@ -34,12 +63,20 @@ impl SignalEvent for SignalEmitter {
     }
 }
 
-pub const CTRL_C_SIGNAL: Signal = CTRL_C_EVENT;
+pub const CTRL_C_SIGNAL: Signal = Signal::CTRL_C_EVENT;
 pub const UNINITIALIZED_SIGNAL_EMITTER: HANDLE = winapi::um::handleapi::INVALID_HANDLE_VALUE;
 
+static SIGNALS: [Signal; 5] = [
+    Signal::CTRL_C_EVENT,
+    Signal::CTRL_BREAK_EVENT,
+    Signal::CTRL_CLOSE_EVENT,
+    Signal::CTRL_LOGOFF_EVENT,
+    Signal::CTRL_SHUTDOWN_EVENT,
+];
+
 /// Iterator returning available signals on this system
-pub fn signal_iterator() -> Range<DWORD> {
-    CTRL_C_EVENT..CTRL_SHUTDOWN_EVENT + 1
+pub fn signal_iterator() -> impl Iterator<Item = Signal> {
+    SIGNALS.iter().cloned()
 }
 
 pub const MAX_SEM_COUNT: c_long = 255;
@@ -48,7 +85,7 @@ impl SignalType {
     /// Get the underlying platform specific signal
     pub fn to_platform_signal(&self) -> Signal {
         match *self {
-            SignalType::Ctrlc => CTRL_C_EVENT,
+            SignalType::Ctrlc => Signal::CTRL_C_EVENT,
             SignalType::Other(s) => s,
         }
     }

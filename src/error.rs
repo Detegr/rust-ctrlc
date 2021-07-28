@@ -7,7 +7,7 @@ pub enum Error {
     /// Channel is empty
     ChannelEmpty,
     /// Signal could not be found from the system.
-    NoSuchSignal(crate::SignalType),
+    NoSuchSignal(crate::Signal),
     /// Ctrl-C signal handler already registered.
     MultipleHandlers,
     /// Unexpected system error.
