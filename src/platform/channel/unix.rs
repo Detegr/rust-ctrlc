@@ -66,7 +66,8 @@ impl UnixChannel {
             // SAFETY: FFI
             let old = unsafe { signal::sigaction(*platform_signal, &new_action)? };
             if old.handler() != nix_signal::SigHandler::SigDfl {
-                platform::revert_sighandler_to_default(*platform_signal);
+                // SAFETY: FFI
+                unsafe { signal::sigaction(*platform_signal, &old)? };
                 return Err(Error::MultipleHandlers);
             }
 

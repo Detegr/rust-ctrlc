@@ -35,7 +35,8 @@ pub fn set_handler(platform_signal: Signal) -> Result<(), Error> {
     // SAFETY: FFI
     let old = unsafe { nix_signal::sigaction(platform_signal, &new_action)? };
     if old.handler() != nix_signal::SigHandler::SigDfl {
-        platform::revert_sighandler_to_default(platform_signal);
+        // SAFETY: FFI
+        unsafe { nix_signal::sigaction(platform_signal, &old)? };
         return Err(Error::MultipleHandlers);
     }
     Ok(())
