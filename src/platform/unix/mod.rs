@@ -147,7 +147,7 @@ pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
         match unistd::read(PIPE.0, &mut buf[..]) {
             Ok(1) => break,
             Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into())),
-            Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {}
+            Err(nix::errno::Errno::EINTR) => {}
             Err(e) => return Err(e.into()),
         }
     }
