@@ -16,7 +16,7 @@ pub enum SignalType {
     /// Ctrl-C
     Ctrlc,
     /// Program termination
-    /// Maps to `SIGTERM` on *nix, `CTRL_CLOSE_EVENT` on Windows.
+    /// Maps to `SIGTERM` and `SIGHUP` on *nix, `CTRL_CLOSE_EVENT` on Windows.
     Termination,
     /// Other signal/event using platform-specific data
     Other(platform::Signal),

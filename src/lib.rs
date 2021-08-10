@@ -40,9 +40,9 @@
 //! }
 //! ```
 //!
-//! # Handling SIGTERM
-//! Handling of `SIGTERM` can be enabled with `termination` feature. If this is enabled,
-//! the handler specified by `set_handler()` will be executed for both `SIGINT` and `SIGTERM`.
+//! # Handling SIGTERM and SIGHUP
+//! Handling of `SIGTERM and SIGHUP` can be enabled with `termination` feature. If this is enabled,
+//! the handler specified by `set_handler()` will be executed for `SIGINT`, `SIGTERM` and `SIGHUP`.
 //!
 
 #[macro_use]
@@ -70,7 +70,7 @@ static INIT: AtomicBool = AtomicBool::new(false);
 /// ```
 ///
 /// # Warning
-/// On Unix, any existing `SIGINT`, `SIGTERM`(if termination feature is enabled) or `SA_SIGINFO`
+/// On Unix, any existing `SIGINT`, `SIGTERM` and `SIGHUP` (if termination feature is enabled) or `SA_SIGINFO`
 /// posix signal handlers will be overwritten. On Windows, multiple handler routines are allowed,
 /// but they are called on a last-registered, first-called basis until the signal is handled.
 ///
