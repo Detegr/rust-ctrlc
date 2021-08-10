@@ -26,8 +26,8 @@ fn main() {
 #### Try the example yourself
 `cargo build --examples && target/debug/examples/readme_example`
 
-## Handling SIGTERM
-Add CtrlC to Cargo.toml using `termination` feature and CtrlC will handle both SIGINT and SIGTERM.
+## Handling SIGTERM and SIGHUP
+Add CtrlC to Cargo.toml using `termination` feature and CtrlC will handle SIGINT, SIGTERM and SIGHUP.
 ```
 [dependencies]
 ctrlc = { version = "3.0", features = ["termination"] }
