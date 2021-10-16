@@ -99,6 +99,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         signal::SigSet::empty(),
     );
 
+    #[allow(unused_variables)]
     let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
         Ok(old) => old,
         Err(e) => return Err(close_pipe(e)),
