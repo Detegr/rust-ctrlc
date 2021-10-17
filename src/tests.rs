@@ -11,19 +11,19 @@
 mod platform {
     use std::io;
 
-    pub unsafe fn setup() -> io::Result<()> {
+    pub fn setup() -> io::Result<()> {
         Ok(())
     }
 
-    pub unsafe fn cleanup() -> io::Result<()> {
+    pub fn cleanup() -> io::Result<()> {
         Ok(())
     }
 
-    pub unsafe fn raise_ctrl_c() {
+    pub fn raise_ctrl_c() {
         nix::sys::signal::raise(nix::sys::signal::SIGINT).unwrap();
     }
 
-    pub unsafe fn print(fmt: ::std::fmt::Arguments) {
+    pub fn print(fmt: ::std::fmt::Arguments) {
         use self::io::Write;
         let stdout = ::std::io::stdout();
         stdout.lock().write_fmt(fmt).unwrap();
@@ -158,118 +158,153 @@ mod platform {
     /// This breaks rust's stdout pre 1.18.0. Rust used to
     /// [cache the std handles](https://github.com/rust-lang/rust/pull/40516)
     ///
-    pub unsafe fn setup() -> io::Result<()> {
-        let old_out = Output::new()?;
+    pub fn setup() -> io::Result<()> {
+        unsafe {
+            let old_out = Output::new()?;
 
-        if FreeConsole() == 0 {
-            return Err(io::Error::last_os_error());
+            if FreeConsole() == 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            if AllocConsole() == 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            // AllocConsole will not always set stdout/stderr to the to the console buffer
+            // of the new terminal.
+
+            let stdout = get_stdout()?;
+            if SetStdHandle(STD_OUTPUT_HANDLE, stdout) == 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            if SetStdHandle(STD_ERROR_HANDLE, stdout) == 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            OLD_OUT = Box::into_raw(Box::new(old_out));
+
+            Ok(())
         }
-
-        if AllocConsole() == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        // AllocConsole will not always set stdout/stderr to the to the console buffer
-        // of the new terminal.
-
-        let stdout = get_stdout()?;
-        if SetStdHandle(STD_OUTPUT_HANDLE, stdout) == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        if SetStdHandle(STD_ERROR_HANDLE, stdout) == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        OLD_OUT = Box::into_raw(Box::new(old_out));
-
-        Ok(())
     }
 
     /// Reattach to the old console.
-    pub unsafe fn cleanup() -> io::Result<()> {
-        if FreeConsole() == 0 {
-            return Err(io::Error::last_os_error());
+    pub fn cleanup() -> io::Result<()> {
+        unsafe {
+            if FreeConsole() == 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            if AttachConsole(winapi::um::wincon::ATTACH_PARENT_PROCESS) == 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            Box::from_raw(OLD_OUT).set_as_std()?;
+
+            Ok(())
         }
-
-        if AttachConsole(winapi::um::wincon::ATTACH_PARENT_PROCESS) == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        Box::from_raw(OLD_OUT).set_as_std()?;
-
-        Ok(())
     }
 
     /// This will signal the whole process group.
-    pub unsafe fn raise_ctrl_c() {
-        assert!(GenerateConsoleCtrlEvent(winapi::um::wincon::CTRL_C_EVENT, 0) != 0);
+    pub fn raise_ctrl_c() {
+        unsafe {
+            assert!(GenerateConsoleCtrlEvent(winapi::um::wincon::CTRL_C_EVENT, 0) != 0);
+        }
     }
 
     /// Print to both consoles, this is not thread safe.
-    pub unsafe fn print(fmt: ::std::fmt::Arguments) {
-        use self::io::Write;
-        {
-            let stdout = io::stdout();
-            stdout.lock().write_fmt(fmt).unwrap();
-        }
-        {
-            assert!(!OLD_OUT.is_null());
-            (*OLD_OUT).write_fmt(fmt).unwrap();
+    pub fn print(fmt: ::std::fmt::Arguments) {
+        unsafe {
+            use self::io::Write;
+            {
+                let stdout = io::stdout();
+                stdout.lock().write_fmt(fmt).unwrap();
+            }
+            {
+                assert!(!OLD_OUT.is_null());
+                (*OLD_OUT).write_fmt(fmt).unwrap();
+            }
         }
     }
 }
 
-fn test_set_handler() {
-    let (tx, rx) = ::std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        tx.send(true).unwrap();
+#[cfg(not(unix))]
+#[cfg(not(windows))]
+mod platform {
+    use std::io;
+
+    pub fn setup() -> io::Result<()> {
+        Ok(())
+    }
+
+    pub fn cleanup() -> io::Result<()> {
+        Ok(())
+    }
+
+    pub fn raise_ctrl_c() {
+    }
+
+    pub fn print(fmt: ::std::fmt::Arguments) {
+        use self::io::Write;
+        let stdout = ::std::io::stdout();
+        stdout.lock().write_fmt(fmt).unwrap();
+    }
+}
+
+async fn test_set_handler()
+{
+    #[cfg(feature = "tokio")]
+    let (tx, mut rx) = ::tokio::sync::mpsc::channel(1);
+    #[cfg(feature = "async-std")]
+    let (tx, rx) = async_std::channel::bounded(1);
+
+    ctrlc::set_async_handler(async move {
+        tx.send(true).await.unwrap();       
     })
     .unwrap();
 
-    unsafe {
-        platform::raise_ctrl_c();
-    }
+    let nothing = ctrlc::helper::timeout(::std::time::Duration::from_millis(100), rx.recv())
+        .await;
+    assert!(nothing.is_none(), "should not have been triggered yet");
 
-    rx.recv_timeout(::std::time::Duration::from_secs(10))
+    platform::raise_ctrl_c();
+
+    ctrlc::helper::timeout(::std::time::Duration::from_secs(10), rx.recv())
+        .await
+        .unwrap()
         .unwrap();
 
-    match ctrlc::set_handler(|| {}) {
+    match ctrlc::set_async_handler(async {}) {
         Err(ctrlc::Error::MultipleHandlers) => {}
-        ret => panic!("{:?}", ret),
+        Err(err) => panic!("{:?}", err),
+        Ok(_) => panic!("should not have succeeded"),
     }
 }
 
 macro_rules! run_tests {
     ( $($test_fn:ident),* ) => {
-        unsafe {
-            platform::print(format_args!("\n"));
-            $(
-                platform::print(format_args!("test tests::{} ... ", stringify!($test_fn)));
-                $test_fn();
-                platform::print(format_args!("ok\n"));
-            )*
-            platform::print(format_args!("\n"));
-        }
+        platform::print(format_args!("\n"));
+        $(
+            platform::print(format_args!("test tests::{} ... ", stringify!($test_fn)));
+            $test_fn().await;
+            platform::print(format_args!("ok\n"));
+        )*
+        platform::print(format_args!("\n"));
     }
 }
 
-fn main() {
-    unsafe {
-        platform::setup().unwrap();
-    }
+#[cfg_attr(feature = "tokio", tokio::main(flavor = "current_thread"))]
+#[cfg_attr(feature = "async-std", async_std::main())]
+async fn main() {
+    platform::setup().unwrap();
 
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        unsafe {
-            platform::cleanup().unwrap();
-        }
+        platform::cleanup().unwrap();
         (default)(info);
     }));
 
     run_tests!(test_set_handler);
 
-    unsafe {
-        platform::cleanup().unwrap();
-    }
+    platform::cleanup().unwrap();
 }

@@ -13,8 +13,14 @@ mod unix;
 #[cfg(windows)]
 mod windows;
 
+mod other;
+
 #[cfg(unix)]
 pub use self::unix::*;
 
 #[cfg(windows)]
 pub use self::windows::*;
+
+#[cfg(not(unix))]
+#[cfg(not(windows))]
+pub use self::other::*;

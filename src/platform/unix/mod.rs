@@ -10,6 +10,7 @@
 use crate::error::Error as CtrlcError;
 use nix::unistd;
 use std::os::unix::io::RawFd;
+use std::future::Future;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
 
@@ -73,7 +74,8 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
-pub unsafe fn init_os_handler() -> Result<(), Error> {
+pub unsafe fn init_os_handler() -> Result<impl Future<Output=Result<(), CtrlcError>>, Error>
+{
     use nix::fcntl;
     use nix::sys::signal;
 
@@ -99,6 +101,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         signal::SigSet::empty(),
     );
 
+    #[allow(unused_variables)]
     let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
         Ok(old) => old,
         Err(e) => return Err(close_pipe(e)),
@@ -123,34 +126,36 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         }
     }
 
-    // TODO: Maybe throw an error if old action is not SigDfl.
+    Ok(
+        async move {
+            use std::io;
+            use nix::sys::aio::AioCb;
+            use nix::sys::aio::LioOpcode;
+            use nix::sys::signal::SigevNotify;
+            let mut buf = [0u8];
 
-    Ok(())
-}
-
-/// Blocks until a Ctrl-C signal is received.
-///
-/// Must be called after calling [`init_os_handler()`](fn.init_os_handler.html).
-///
-/// # Errors
-/// Will return an error if a system error occurred.
-///
-#[inline]
-pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
-    use std::io;
-    let mut buf = [0u8];
-
-    // TODO: Can we safely convert the pipe fd into a std::io::Read
-    // with std::os::unix::io::FromRawFd, this would handle EINTR
-    // and everything for us.
-    loop {
-        match unistd::read(PIPE.0, &mut buf[..]) {
-            Ok(1) => break,
-            Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into())),
-            Err(nix::errno::Errno::EINTR) => {}
-            Err(e) => return Err(e.into()),
+            // TODO: Can we safely convert the pipe fd into a std::io::Read
+            // with std::os::unix::io::FromRawFd, this would handle EINTR
+            // and everything for us.
+            loop {
+                let mut aio = AioCb::from_mut_slice( PIPE.0, 0, &mut buf[..], 0, SigevNotify::SigevNone, LioOpcode::LIO_NOP);
+                aio.read()?;
+                while aio.error() == Err(nix::errno::Errno::EINPROGRESS) {
+                    #[cfg(feature = "tokio")]
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    #[cfg(not(feature = "tokio"))]
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                match aio.aio_return() {
+                    Ok(1) => break,
+                    Ok(_) => {
+                        return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into()))
+                    },
+                    Err(nix::errno::Errno::EINTR) => {}
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            Ok(())
         }
-    }
-
-    Ok(())
+    )
 }

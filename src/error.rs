@@ -8,6 +8,8 @@ pub enum Error {
     NoSuchSignal(crate::SignalType),
     /// Ctrl-C signal handler already registered.
     MultipleHandlers,
+    /// The handler has exited.
+    NoHandler,
     /// Unexpected system error.
     System(std::io::Error),
 }
@@ -17,6 +19,7 @@ impl Error {
         match *self {
             Error::NoSuchSignal(_) => "Signal could not be found from the system",
             Error::MultipleHandlers => "Ctrl-C signal handler already registered",
+            Error::NoHandler => "The handler has exited",
             Error::System(_) => "Unexpected system error",
         }
     }

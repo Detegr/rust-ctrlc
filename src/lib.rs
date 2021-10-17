@@ -51,11 +51,14 @@ mod error;
 mod platform;
 pub use platform::Signal;
 mod signal;
+pub mod helper;
 pub use signal::*;
+use std::future::Future;
 
 pub use error::Error;
+pub(crate) use helper::*;
+
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
 
 static INIT: AtomicBool = AtomicBool::new(false);
 
@@ -85,33 +88,64 @@ static INIT: AtomicBool = AtomicBool::new(false);
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
-pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
-where
-    F: FnMut() -> () + 'static + Send,
+pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
+where F: FnMut() -> () + 'static + Send,
 {
-    if INIT.compare_and_swap(false, true, Ordering::SeqCst) {
+    set_async_handler(async move {
+        block_on(user_handler);
+    })
+}
+
+/// Register an asynchronous signal handler for Ctrl-C.
+///
+/// Signal handling will be spawned on the tokio runtime. Should only be called once,
+/// typically at the start of your program.
+///
+/// # Example
+/// ```no_run
+/// ctrlc::set_async_handler(async { println!("Hello world!"); }).expect("Error setting Ctrl-C handler");
+/// ```
+///
+/// # Warning
+/// On Unix, any existing `SIGINT`, `SIGTERM` and `SIGHUP` (if termination feature is enabled) or `SA_SIGINFO`
+/// posix signal handlers will be overwritten. On Windows, multiple handler routines are allowed,
+/// but they are called on a last-registered, first-called basis until the signal is handled.
+///
+/// On Unix, signal dispositions and signal handlers are inherited by child processes created via
+/// `fork(2)` on, but not by child processes created via `execve(2)`.
+/// Signal handlers are not inherited on Windows.
+///
+/// # Errors
+/// Will return an error if another `ctrlc::set_handler()` handler exists or if a
+/// system error occurred while setting the handler.
+///
+/// # Panics
+/// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
+///
+pub fn set_async_handler<F>(user_handler: F) -> Result<(), Error>
+where
+    F: Future<Output=()> + Send + 'static,
+{
+    if INIT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).map_or_else(|e| e, |a| a) {
         return Err(Error::MultipleHandlers);
     }
 
-    unsafe {
+    #[allow(unused_unsafe)]
+    let task = unsafe {
         match platform::init_os_handler() {
-            Ok(_) => {}
+            Ok(a) => a,
             Err(err) => {
                 INIT.store(false, Ordering::SeqCst);
                 return Err(err.into());
             }
         }
-    }
-
-    thread::Builder::new()
-        .name("ctrl-c".into())
-        .spawn(move || loop {
-            unsafe {
-                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
-            }
-            user_handler();
-        })
-        .expect("failed to spawn thread");
+    };
+    
+    spawn(async move {
+        if let Ok(_) = task.await {
+            user_handler.await;
+        }
+    });
 
     Ok(())
 }

@@ -17,6 +17,8 @@ use winapi::um::handleapi::CloseHandle;
 use winapi::um::synchapi::{ReleaseSemaphore, WaitForSingleObject};
 use winapi::um::winbase::{CreateSemaphoreA, INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
 
+use crate::Context;
+
 /// Platform specific error type
 pub type Error = io::Error;
 
@@ -41,7 +43,8 @@ unsafe extern "system" fn os_handler(_: DWORD) -> BOOL {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
-pub unsafe fn init_os_handler() -> Result<(), Error> {
+pub unsafe fn init_os_handler() -> Result<impl Future<Output=Result<(), CtrlcError>>, Error>
+{
     SEMAPHORE = CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
     if SEMAPHORE.is_null() {
         return Err(io::Error::last_os_error());
@@ -54,27 +57,19 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         return Err(e);
     }
 
-    Ok(())
-}
-
-/// Blocks until a Ctrl-C signal is received.
-///
-/// Must be called after calling [`init_os_handler()`](fn.init_os_handler.html).
-///
-/// # Errors
-/// Will return an error if a system error occurred.
-///
-#[inline]
-pub unsafe fn block_ctrl_c() -> Result<(), Error> {
-    match WaitForSingleObject(SEMAPHORE, INFINITE) {
-        WAIT_OBJECT_0 => Ok(()),
-        WAIT_FAILED => Err(io::Error::last_os_error()),
-        ret => Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "WaitForSingleObject(), unexpected return value \"{:x}\"",
-                ret
-            ),
-        )),
-    }
+    Ok(
+        async move {
+            match WaitForSingleObject(SEMAPHORE, INFINITE) {
+                WAIT_OBJECT_0 => Ok(()),
+                WAIT_FAILED => Err(io::Error::last_os_error()),
+                ret => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "WaitForSingleObject(), unexpected return value \"{:x}\"",
+                        ret
+                    ),
+                )),
+            }
+        }
+    )
 }

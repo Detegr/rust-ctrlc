@@ -1,7 +1,7 @@
 [package]
 name = "ctrlc"
 version = "3.2.1"
-authors = ["Antti Keränen <detegr@gmail.com>"]
+authors = ["Antti Keränen <detegr@gmail.com>", "John Sharratt <johnathan.sharratt@gmail.com>"]
 description = "Easy Ctrl-C handler for Rust projects"
 documentation = "http://detegr.github.io/doc/ctrlc"
 homepage = "https://github.com/Detegr/rust-ctrlc"
@@ -13,6 +13,14 @@ exclude = ["/.travis.yml", "/appveyor.yml"]
 edition = "2018"
 readme = "README.md"
 
+[features]
+default = [ "tokio" ]
+termination = []
+
+[dependencies]
+tokio = { version = "^1", features = [ "macros", "rt", "sync", "time" ], optional = true }
+async-std = { version = "^1", features = [ "alloc", "attributes", "default" ], default-features = false, optional = true }
+
 [target.'cfg(unix)'.dependencies]
 nix = "0.23"
 
@@ -21,9 +29,6 @@ winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "
 
 [target.'cfg(windows)'.dev-dependencies]
 winapi = { version = "0.3", features = ["fileapi", "processenv", "winnt"] }
-
-[features]
-termination = []
 
 [[test]]
 harness = false
