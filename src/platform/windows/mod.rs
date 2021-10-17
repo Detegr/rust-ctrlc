@@ -16,8 +16,8 @@ use winapi::um::consoleapi::SetConsoleCtrlHandler;
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::synchapi::{ReleaseSemaphore, WaitForSingleObject};
 use winapi::um::winbase::{CreateSemaphoreA, INFINITE, WAIT_FAILED, WAIT_OBJECT_0};
-
-use crate::Context;
+use std::future::Future;
+use crate::error::Error as CtrlcError;
 
 /// Platform specific error type
 pub type Error = io::Error;
@@ -61,14 +61,14 @@ pub unsafe fn init_os_handler() -> Result<impl Future<Output=Result<(), CtrlcErr
         async move {
             match WaitForSingleObject(SEMAPHORE, INFINITE) {
                 WAIT_OBJECT_0 => Ok(()),
-                WAIT_FAILED => Err(io::Error::last_os_error()),
-                ret => Err(io::Error::new(
+                WAIT_FAILED => Err(CtrlcError::System(io::Error::last_os_error())),
+                ret => Err(CtrlcError::System(io::Error::new(
                     io::ErrorKind::Other,
                     format!(
                         "WaitForSingleObject(), unexpected return value \"{:x}\"",
                         ret
                     ),
-                )),
+                ))),
             }
         }
     )
