@@ -1,6 +1,7 @@
 //! Helper routines for the asynchronous functions
 
 use std::future::Future;
+#[cfg(test)]
 use std::time::Duration;
 
 /// Spawns a background thread using which ever asynchronous runtime the library is built with
@@ -31,7 +32,7 @@ where T: Future + Send + 'static, T::Output: Send + 'static,
 }
 
 /// Safely executing blocking code using which ever asynchronous runtime the library is built with
-pub fn block_on<F>(mut task: F)
+pub fn spawn_block_on<F>(mut task: F)
 where F: FnMut() -> () + 'static + Send,
 {
     #[cfg(feature = "tokio")]
@@ -54,6 +55,7 @@ where F: FnMut() -> () + 'static + Send,
 }
 
 /// Executes a future with a specific timeout using which ever asynchronous runtime the library is built with
+#[cfg(test)]
 #[must_use = "this `Option` should be handled"]
 pub async fn timeout<F>(duration: Duration, future: F) -> Option<F::Output>
 where F: Future

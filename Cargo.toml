@@ -30,7 +30,5 @@ winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "
 [target.'cfg(windows)'.dev-dependencies]
 winapi = { version = "0.3", features = ["fileapi", "processenv", "winnt"] }
 
-[[test]]
-harness = false
-name = "tests"
-path = "src/tests.rs"
+[dev-dependencies]
+rusty-fork = "0.3.0"

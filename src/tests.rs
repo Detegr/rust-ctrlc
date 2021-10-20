@@ -1,3 +1,4 @@
+#![cfg(test)]
 // Copyright (c) 2017 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
@@ -251,31 +252,57 @@ mod platform {
     }
 }
 
-async fn test_set_handler()
+fn test_set_handler()
+{
+    let (tx, rx) = ::std::sync::mpsc::channel();
+    crate::set_handler(move || {
+        tx.send(true).unwrap();
+    })
+    .unwrap();
+
+    let nothing = rx.recv_timeout(::std::time::Duration::from_millis(100));
+    assert!(nothing.is_err(), "should not have been triggered yet");
+
+    platform::raise_ctrl_c();
+
+    rx.recv_timeout(::std::time::Duration::from_secs(10))
+        .unwrap();
+
+    match crate::set_handler(|| {}) {
+        Err(crate::Error::MultipleHandlers) => {}
+        Err(err) => panic!("{:?}", err),
+        Ok(_) => panic!("should not have succeeded"),
+    }
+}
+
+
+#[cfg_attr(feature = "tokio", tokio::main(flavor = "current_thread"))]
+#[cfg_attr(feature = "async-std", async_std::main())]
+async fn test_set_async_handler()
 {
     #[cfg(feature = "tokio")]
     let (tx, mut rx) = ::tokio::sync::mpsc::channel(1);
     #[cfg(feature = "async-std")]
     let (tx, rx) = async_std::channel::bounded(1);
 
-    ctrlc::set_async_handler(async move {
+    crate::set_async_handler(async move {
         tx.send(true).await.unwrap();       
     })
     .unwrap();
 
-    let nothing = ctrlc::helper::timeout(::std::time::Duration::from_millis(100), rx.recv())
+    let nothing = crate::helper::timeout(::std::time::Duration::from_millis(100), rx.recv())
         .await;
     assert!(nothing.is_none(), "should not have been triggered yet");
 
     platform::raise_ctrl_c();
 
-    ctrlc::helper::timeout(::std::time::Duration::from_secs(10), rx.recv())
+    crate::helper::timeout(::std::time::Duration::from_secs(10), rx.recv())
         .await
         .unwrap()
         .unwrap();
 
-    match ctrlc::set_async_handler(async {}) {
-        Err(ctrlc::Error::MultipleHandlers) => {}
+    match crate::set_async_handler(async {}) {
+        Err(crate::Error::MultipleHandlers) => {}
         Err(err) => panic!("{:?}", err),
         Ok(_) => panic!("should not have succeeded"),
     }
@@ -286,25 +313,42 @@ macro_rules! run_tests {
         platform::print(format_args!("\n"));
         $(
             platform::print(format_args!("test tests::{} ... ", stringify!($test_fn)));
-            $test_fn().await;
+            $test_fn();
             platform::print(format_args!("ok\n"));
         )*
         platform::print(format_args!("\n"));
     }
 }
 
-#[cfg_attr(feature = "tokio", tokio::main(flavor = "current_thread"))]
-#[cfg_attr(feature = "async-std", async_std::main())]
-async fn main() {
-    platform::setup().unwrap();
+use rusty_fork::rusty_fork_test;
+rusty_fork_test! {
+    #[test]
+    fn test_sync() {
+        platform::setup().unwrap();
 
-    let default = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
+        let default = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            platform::cleanup().unwrap();
+            (default)(info);
+        }));
+
+        run_tests!(test_set_handler);
+
         platform::cleanup().unwrap();
-        (default)(info);
-    }));
+    }
 
-    run_tests!(test_set_handler);
+    #[test]
+    fn test_async() {
+        platform::setup().unwrap();
 
-    platform::cleanup().unwrap();
+        let default = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            platform::cleanup().unwrap();
+            (default)(info);
+        }));
+
+        run_tests!(test_set_async_handler);
+
+        platform::cleanup().unwrap();
+    }
 }

@@ -74,7 +74,8 @@ mod error;
 mod platform;
 pub use platform::Signal;
 mod signal;
-pub mod helper;
+mod tests;
+pub(crate) mod helper;
 pub use signal::*;
 use std::future::Future;
 
@@ -122,7 +123,7 @@ pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
 where F: FnMut() -> () + 'static + Send,
 {
     set_async_handler(async move {
-        block_on(user_handler);
+        spawn_block_on(user_handler);
     })
 }
 
