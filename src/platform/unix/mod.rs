@@ -141,10 +141,7 @@ pub unsafe fn init_os_handler() -> Result<impl Future<Output=Result<(), CtrlcErr
                 let mut aio = AioCb::from_mut_slice( PIPE.0, 0, &mut buf[..], 0, SigevNotify::SigevNone, LioOpcode::LIO_NOP);
                 aio.read()?;
                 while aio.error() == Err(nix::errno::Errno::EINPROGRESS) {
-                    #[cfg(feature = "tokio")]
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                    #[cfg(not(feature = "tokio"))]
-                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    crate::helper::sleep(std::time::Duration::from_millis(10)).await;
                 }
                 match aio.aio_return() {
                     Ok(1) => break,

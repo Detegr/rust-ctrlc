@@ -1,7 +1,6 @@
 //! Helper routines for the asynchronous functions
 
 use std::future::Future;
-#[cfg(test)]
 use std::time::Duration;
 
 /// Spawns a background thread using which ever asynchronous runtime the library is built with
@@ -24,11 +23,15 @@ where T: Future + Send + 'static, T::Output: Send + 'static,
     }
 
     #[cfg(feature = "async-std")]
-    std::thread::Builder::new()
-        .spawn(move || {
-            async_std::task::block_on(future);
-        })
-        .expect("failed to spawn thread");
+    if async_std::task::try_current().is_some() {
+        async_std::task::spawn(future);
+    } else {
+        std::thread::Builder::new()
+            .spawn(move || {
+                async_std::task::block_on(future);
+            })
+            .expect("failed to spawn thread");
+    }
 }
 
 /// Safely executing blocking code using which ever asynchronous runtime the library is built with
@@ -71,4 +74,14 @@ where F: Future
         Ok(a) => Some(a),
         Err(_) => None
     };
+}
+
+/// Sleeps for a fixed period of time (without blocking asynchronous runtimes)
+pub async fn sleep(duration: Duration)
+{
+    #[cfg(feature = "tokio")]
+    tokio::time::sleep(duration).await;
+
+    #[cfg(feature = "async-std")]
+    async_std::task::sleep(duration).await;
 }

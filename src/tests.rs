@@ -275,9 +275,21 @@ fn test_set_handler()
     }
 }
 
+fn test_set_async_handler_wrapper()
+{
+    #[cfg(feature = "tokio")]
+    {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        runtime.block_on(test_set_async_handler());
+    }
 
-#[cfg_attr(feature = "tokio", tokio::main(flavor = "current_thread"))]
-#[cfg_attr(feature = "async-std", async_std::main())]
+    #[cfg(feature = "async-std")]
+    async_std::task::block_on(test_set_async_handler());
+}
+
 async fn test_set_async_handler()
 {
     #[cfg(feature = "tokio")]
@@ -347,7 +359,7 @@ rusty_fork_test! {
             (default)(info);
         }));
 
-        run_tests!(test_set_async_handler);
+        run_tests!(test_set_async_handler_wrapper);
 
         platform::cleanup().unwrap();
     }

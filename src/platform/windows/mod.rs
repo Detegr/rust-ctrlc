@@ -59,16 +59,23 @@ pub unsafe fn init_os_handler() -> Result<impl Future<Output=Result<(), CtrlcErr
 
     Ok(
         async move {
-            match WaitForSingleObject(SEMAPHORE, INFINITE) {
-                WAIT_OBJECT_0 => Ok(()),
-                WAIT_FAILED => Err(CtrlcError::System(io::Error::last_os_error())),
-                ret => Err(CtrlcError::System(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "WaitForSingleObject(), unexpected return value \"{:x}\"",
-                        ret
-                    ),
-                ))),
+            loop {
+                match WaitForSingleObject(SEMAPHORE, 0) {
+                    WAIT_OBJECT_0 => { return Ok(()) },
+                    WAIT_TIMEOUT | WAIT_IO_COMPLETION => {
+                        crate::helper::sleep(std::time::Duration::from_millis(10)).await;
+                    }
+                    WAIT_FAILED => { return Err(CtrlcError::System(io::Error::last_os_error())) },
+                    ret => {
+                        return Err(CtrlcError::System(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!(
+                                "WaitForSingleObject(), unexpected return value \"{:x}\"",
+                                ret
+                            ),
+                        )))
+                    },
+                }
             }
         }
     )

@@ -48,7 +48,6 @@
 //! 
 //! # Example
 //! ```no_run
-//! #![cfg(feature="tokio")] 
 //! #[cfg_attr(feature = "tokio", tokio::main(flavor = "current_thread"))]
 //! #[cfg_attr(feature = "async-std", async_std::main())]
 //! async fn main() {
