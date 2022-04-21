@@ -14,7 +14,7 @@ edition = "2018"
 readme = "README.md"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.23"
+nix = { version = "0.24", default-features = false, features = ["fs", "signal"]}
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "winbase"] }
