@@ -14,7 +14,7 @@ edition = "2018"
 readme = "README.md"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.24", default-features = false, features = ["fs", "signal"]}
+nix = { version = "0.24", git = "https://github.com/nix-rust/nix", rev = "b0ab5573ea0a0df48053743d451cbdd9e3df7f68", default-features = false, features = ["fs", "signal"]}
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["consoleapi", "handleapi", "synchapi", "winbase"] }
