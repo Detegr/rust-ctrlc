@@ -118,3 +118,28 @@ where
 
     Ok(())
 }
+
+/// Block thread until signal
+pub fn block_until_ctrlc() -> Result<(), Error> {
+    if INIT
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .map_or_else(|e| e, |a| a)
+    {
+        return Err(Error::MultipleHandlers);
+    }
+
+    unsafe {
+        match platform::init_os_handler() {
+            Ok(_) => {}
+            Err(err) => {
+                INIT.store(false, Ordering::SeqCst);
+                return Err(err.into());
+            }
+        }
+    }
+
+    unsafe {
+        platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
+    }
+    Ok(())
+}
