@@ -26,9 +26,14 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
     }
 }
 
-// pipe2(2) is not available on macOS, iOS or Haiku, so we need to use pipe(2) and fcntl(2)
+// pipe2(2) is not available on macOS, iOS, AIX or Haiku, so we need to use pipe(2) and fcntl(2)
 #[inline]
-#[cfg(any(target_os = "ios", target_os = "macos", target_os = "haiku"))]
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "haiku",
+    target_os = "aix"
+))]
 fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
 
@@ -59,7 +64,12 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 }
 
 #[inline]
-#[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "haiku")))]
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "haiku",
+    target_os = "aix"
+)))]
 fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     unistd::pipe2(flags)
 }
