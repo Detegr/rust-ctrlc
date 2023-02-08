@@ -15,6 +15,7 @@ readme = "README.md"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26", default-features = false, features = ["fs", "signal"]}
+signal-hook-registry = { version = "1.4.0", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.45", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_System_WindowsProgramming", "Win32_System_Console"] }
@@ -29,3 +30,5 @@ termination = []
 harness = false
 name = "tests"
 path = "src/tests.rs"
+
+[dependencies]

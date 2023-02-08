@@ -19,7 +19,7 @@ pub type Error = nix::Error;
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
 
-extern "C" fn os_handler(_: nix::libc::c_int) {
+fn os_handler() {
     // Assuming this always succeeds. Can't really handle errors in any meaningful way.
     unsafe {
         let _ = unistd::write(PIPE.1, &[0u8]);
@@ -85,7 +85,6 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 #[inline]
 pub unsafe fn init_os_handler() -> Result<(), Error> {
     use nix::fcntl;
-    use nix::sys::signal;
 
     PIPE = pipe2(fcntl::OFlag::O_CLOEXEC)?;
 
@@ -102,34 +101,32 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         return Err(close_pipe(e));
     }
 
-    let handler = signal::SigHandler::Handler(os_handler);
-    let new_action = signal::SigAction::new(
-        handler,
-        signal::SaFlags::SA_RESTART,
-        signal::SigSet::empty(),
-    );
+    // Register the handler.
+    let res = unsafe {
+        signal_hook_registry::register(nix::libc::SIGINT, os_handler)
+    };
 
     #[allow(unused_variables)]
-    let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
+    let sigint_id = match res {
         Ok(old) => old,
-        Err(e) => return Err(close_pipe(e)),
+        Err(_e) => return Err(close_pipe(nix::Error::EINVAL)),
     };
 
     #[cfg(feature = "termination")]
     {
-        let sigterm_old = match signal::sigaction(signal::Signal::SIGTERM, &new_action) {
+        let sigterm_id = match unsafe { signal_hook_registry::register(nix::libc::SIGTERM, os_handler) } { 
             Ok(old) => old,
-            Err(e) => {
-                signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
-                return Err(close_pipe(e));
+            Err(_e) => {
+                signal_hook_registry::unregister(sigint_id);
+                return Err(close_pipe(nix::Error::EINVAL));
             }
         };
-        match signal::sigaction(signal::Signal::SIGHUP, &new_action) {
+        match unsafe { signal_hook_registry::register(nix::libc::SIGHUP, os_handler) } {
             Ok(_) => {}
-            Err(e) => {
-                signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
-                signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
-                return Err(close_pipe(e));
+            Err(_e) => {
+                signal_hook_registry::unregister(sigint_id);
+                signal_hook_registry::unregister(sigterm_id);
+                return Err(close_pipe(nix::Error::EINVAL));
             }
         }
     }
