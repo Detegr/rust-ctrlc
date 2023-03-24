@@ -32,7 +32,8 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
     target_os = "ios",
     target_os = "macos",
     target_os = "haiku",
-    target_os = "aix"
+    target_os = "aix",
+    target_os = "nto",
 ))]
 fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
@@ -68,7 +69,8 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     target_os = "ios",
     target_os = "macos",
     target_os = "haiku",
-    target_os = "aix"
+    target_os = "aix",
+    target_os = "nto",
 )))]
 fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     unistd::pipe2(flags)
@@ -103,11 +105,16 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     }
 
     let handler = signal::SigHandler::Handler(os_handler);
+    #[cfg(not(target_os = "nto"))]
     let new_action = signal::SigAction::new(
         handler,
         signal::SaFlags::SA_RESTART,
         signal::SigSet::empty(),
     );
+    // SA_RESTART is not supported on QNX Neutrino 7.1 and before
+    #[cfg(target_os = "nto")]
+    let new_action =
+        signal::SigAction::new(handler, signal::SaFlags::empty(), signal::SigSet::empty());
 
     let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
         Ok(old) => old,
