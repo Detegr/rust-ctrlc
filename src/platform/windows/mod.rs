@@ -12,9 +12,8 @@ use std::ptr;
 use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HANDLE, WAIT_FAILED, WAIT_OBJECT_0};
 use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
 use windows_sys::Win32::System::Threading::{
-    CreateSemaphoreA, ReleaseSemaphore, WaitForSingleObject,
+    CreateSemaphoreA, ReleaseSemaphore, WaitForSingleObject, INFINITE,
 };
-use windows_sys::Win32::System::WindowsProgramming::INFINITE;
 
 /// Platform specific error type
 pub type Error = io::Error;
