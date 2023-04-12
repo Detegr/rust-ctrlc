@@ -34,7 +34,9 @@ mod platform {
 mod platform {
     use std::io;
     use std::ptr;
-    use windows_sys::Win32::Foundation::{CHAR, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Foundation::{
+        GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
+    };
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileA, WriteFile, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
@@ -43,7 +45,6 @@ mod platform {
         GetStdHandle, SetStdHandle, ATTACH_PARENT_PROCESS, CTRL_C_EVENT, STD_ERROR_HANDLE,
         STD_OUTPUT_HANDLE,
     };
-    use windows_sys::Win32::System::SystemServices::{GENERIC_READ, GENERIC_WRITE};
 
     /// Stores a piped stdout handle or a cache that gets
     /// flushed when we reattached to the old console.
@@ -61,7 +62,7 @@ mod platform {
                     let mut n = 0u32;
                     if WriteFile(
                         handle,
-                        buf.as_ptr() as *const core::ffi::c_void,
+                        buf.as_ptr(),
                         buf.len() as u32,
                         &mut n as *mut u32,
                         ptr::null_mut(),
@@ -129,7 +130,7 @@ mod platform {
 
     unsafe fn get_stdout() -> io::Result<HANDLE> {
         let stdout = CreateFileA(
-            "CONOUT$\0".as_ptr() as *const CHAR,
+            "CONOUT$\0".as_ptr(),
             GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_WRITE,
             ptr::null_mut(),
