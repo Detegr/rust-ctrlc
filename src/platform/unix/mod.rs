@@ -102,9 +102,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
     }
 
     // Register the handler.
-    let res = unsafe {
-        signal_hook_registry::register(nix::libc::SIGINT, os_handler)
-    };
+    let res = unsafe { signal_hook_registry::register(nix::libc::SIGINT, os_handler) };
 
     #[allow(unused_variables)]
     let sigint_id = match res {
@@ -114,13 +112,14 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
 
     #[cfg(feature = "termination")]
     {
-        let sigterm_id = match unsafe { signal_hook_registry::register(nix::libc::SIGTERM, os_handler) } { 
-            Ok(old) => old,
-            Err(_e) => {
-                signal_hook_registry::unregister(sigint_id);
-                return Err(close_pipe(nix::Error::EINVAL));
-            }
-        };
+        let sigterm_id =
+            match unsafe { signal_hook_registry::register(nix::libc::SIGTERM, os_handler) } {
+                Ok(old) => old,
+                Err(_e) => {
+                    signal_hook_registry::unregister(sigint_id);
+                    return Err(close_pipe(nix::Error::EINVAL));
+                }
+            };
         match unsafe { signal_hook_registry::register(nix::libc::SIGHUP, os_handler) } {
             Ok(_) => {}
             Err(_e) => {
