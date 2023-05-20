@@ -23,6 +23,7 @@
 //!
 //! # Example
 //! ```no_run
+//! # #[allow(clippy::needless_doctest_main)]
 //! use std::sync::atomic::{AtomicBool, Ordering};
 //! use std::sync::Arc;
 //!
@@ -87,7 +88,7 @@ static INIT: AtomicBool = AtomicBool::new(false);
 ///
 pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
 where
-    F: FnMut() -> () + 'static + Send,
+    F: FnMut() + 'static + Send,
 {
     if INIT
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
