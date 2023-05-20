@@ -70,8 +70,8 @@ static INIT: AtomicBool = AtomicBool::new(false);
 /// ```
 ///
 /// # Warning
-/// On Unix, any existing `SIGINT`, `SIGTERM` and `SIGHUP` (if termination feature is enabled) or `SA_SIGINFO`
-/// posix signal handlers will be overwritten. On Windows, multiple handler routines are allowed,
+/// On Unix, the handler registration for `SIGINT`, (`SIGTERM` and `SIGHUP` if termination feature is enabled) or `SA_SIGINFO`
+/// posix signal handlers will fail if a signal handler is already present. On Windows, multiple handler routines are allowed,
 /// but they are called on a last-registered, first-called basis until the signal is handled.
 ///
 /// On Unix, signal dispositions and signal handlers are inherited by child processes created via

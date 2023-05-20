@@ -24,6 +24,11 @@ impl Error {
 
 impl From<platform::Error> for Error {
     fn from(e: platform::Error) -> Error {
+        #[cfg(not(windows))]
+        if e == platform::Error::EEXIST {
+            return Error::MultipleHandlers;
+        }
+
         let system_error = std::io::Error::new(std::io::ErrorKind::Other, e);
         Error::System(system_error)
     }

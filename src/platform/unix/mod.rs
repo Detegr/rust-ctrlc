@@ -109,11 +109,13 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         signal::SigSet::empty(),
     );
 
-    #[allow(unused_variables)]
     let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
         Ok(old) => old,
         Err(e) => return Err(close_pipe(e)),
     };
+    if sigint_old.handler() != signal::SigHandler::SigDfl {
+        return Err(close_pipe(nix::Error::EEXIST));
+    }
 
     #[cfg(feature = "termination")]
     {
@@ -124,17 +126,24 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
                 return Err(close_pipe(e));
             }
         };
-        match signal::sigaction(signal::Signal::SIGHUP, &new_action) {
-            Ok(_) => {}
+        if sigterm_old.handler() != signal::SigHandler::SigDfl {
+            signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
+            return Err(close_pipe(nix::Error::EEXIST));
+        }
+        let sighup_old = match signal::sigaction(signal::Signal::SIGHUP, &new_action) {
+            Ok(old) => old,
             Err(e) => {
                 signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
                 signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
                 return Err(close_pipe(e));
             }
+        };
+        if sighup_old.handler() != signal::SigHandler::SigDfl {
+            signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
+            signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
+            return Err(close_pipe(nix::Error::EEXIST));
         }
     }
-
-    // TODO: Maybe throw an error if old action is not SigDfl.
 
     Ok(())
 }

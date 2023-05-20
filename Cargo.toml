@@ -27,5 +27,13 @@ termination = []
 
 [[test]]
 harness = false
-name = "tests"
-path = "src/tests.rs"
+name = "main"
+path = "tests/main/mod.rs"
+
+[[test]]
+harness = false
+name = "issue_97"
+path = "tests/main/issue_97.rs"
+
+[dev-dependencies]
+signal-hook = "0.3"

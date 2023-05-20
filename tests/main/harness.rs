@@ -1,4 +1,4 @@
-// Copyright (c) 2017 CtrlC developers
+// Copyright (c) 2023 CtrlC developers
 // Licensed under the Apache License, Version 2.0
 // <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT
@@ -8,7 +8,7 @@
 // according to those terms.
 
 #[cfg(unix)]
-mod platform {
+pub mod platform {
     use std::io;
 
     pub unsafe fn setup() -> io::Result<()> {
@@ -31,7 +31,7 @@ mod platform {
 }
 
 #[cfg(windows)]
-mod platform {
+pub mod platform {
     use std::io;
     use std::ptr;
     use windows_sys::Win32::Foundation::{
@@ -216,41 +216,19 @@ mod platform {
     }
 }
 
-fn test_set_handler() {
-    let (tx, rx) = ::std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        tx.send(true).unwrap();
-    })
-    .unwrap();
-
-    unsafe {
-        platform::raise_ctrl_c();
-    }
-
-    rx.recv_timeout(::std::time::Duration::from_secs(10))
-        .unwrap();
-
-    match ctrlc::set_handler(|| {}) {
-        Err(ctrlc::Error::MultipleHandlers) => {}
-        ret => panic!("{:?}", ret),
-    }
-}
-
 macro_rules! run_tests {
     ( $($test_fn:ident),* ) => {
         unsafe {
-            platform::print(format_args!("\n"));
             $(
-                platform::print(format_args!("test tests::{} ... ", stringify!($test_fn)));
+                harness::platform::print(format_args!("test {} ... ", stringify!($test_fn)));
                 $test_fn();
-                platform::print(format_args!("ok\n"));
+                harness::platform::print(format_args!("ok\n"));
             )*
-            platform::print(format_args!("\n"));
         }
     }
 }
 
-fn main() {
+pub fn run_harness(f: fn()) {
     unsafe {
         platform::setup().unwrap();
     }
@@ -263,7 +241,9 @@ fn main() {
         (default)(info);
     }));
 
-    run_tests!(test_set_handler);
+    println!("");
+    f();
+    println!("");
 
     unsafe {
         platform::cleanup().unwrap();
