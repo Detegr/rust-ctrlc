@@ -114,6 +114,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         Err(e) => return Err(close_pipe(e)),
     };
     if sigint_old.handler() != signal::SigHandler::SigDfl {
+        signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
         return Err(close_pipe(nix::Error::EEXIST));
     }
 
@@ -128,6 +129,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         };
         if sigterm_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
+            signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
             return Err(close_pipe(nix::Error::EEXIST));
         }
         let sighup_old = match signal::sigaction(signal::Signal::SIGHUP, &new_action) {
@@ -141,6 +143,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         if sighup_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
             signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
+            signal::sigaction(signal::Signal::SIGHUP, &sighup_old).unwrap();
             return Err(close_pipe(nix::Error::EEXIST));
         }
     }
