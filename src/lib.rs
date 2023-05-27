@@ -56,9 +56,11 @@ pub use signal::*;
 
 pub use error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::thread;
 
 static INIT: AtomicBool = AtomicBool::new(false);
+static INIT_LOCK: Mutex<()> = Mutex::new(());
 
 /// Register signal handler for Ctrl-C.
 ///
@@ -86,22 +88,31 @@ static INIT: AtomicBool = AtomicBool::new(false);
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
 ///
-pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
+pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
 where
     F: FnMut() + 'static + Send,
 {
-    if INIT
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .map_or_else(|e| e, |a| a)
-    {
-        return Err(Error::MultipleHandlers);
+    if !INIT.load(Ordering::Acquire) {
+        let _guard = INIT_LOCK.lock().unwrap();
+
+        if !INIT.load(Ordering::Relaxed) {
+            set_handler_inner(user_handler)?;
+            INIT.store(true, Ordering::Release);
+            return Ok(());
+        }
     }
 
+    Err(Error::MultipleHandlers)
+}
+
+fn set_handler_inner<F>(mut user_handler: F) -> Result<(), Error>
+where
+    F: FnMut() + 'static + Send,
+{
     unsafe {
         match platform::init_os_handler() {
             Ok(_) => {}
             Err(err) => {
-                INIT.store(false, Ordering::SeqCst);
                 return Err(err.into());
             }
         }
