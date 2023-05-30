@@ -28,10 +28,6 @@ fn main() {
 
 ## Handling SIGTERM and SIGHUP
 Add CtrlC to Cargo.toml using `termination` feature and CtrlC will handle SIGINT, SIGTERM and SIGHUP.
-```
-[dependencies]
-ctrlc = { version = "3.0", features = ["termination"] }
-```
 
 ## License
 
