@@ -16,7 +16,7 @@ use test_signal_hook::run_signal_hook;
 
 fn expect_multiple_handlers() {
     #[cfg(not(windows))]
-    match ctrlc::set_handler(|| {}) {
+    match ctrlc::try_set_handler(|| {}) {
         Err(ctrlc::Error::MultipleHandlers) => {}
         _ => panic!("Expected Error::MultipleHandlers"),
     }

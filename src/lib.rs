@@ -73,22 +73,43 @@ static INIT_LOCK: Mutex<()> = Mutex::new(());
 /// ```
 ///
 /// # Warning
-/// On Unix, the handler registration for `SIGINT`, (`SIGTERM` and `SIGHUP` if termination feature is enabled) or `SA_SIGINFO`
-/// posix signal handlers will fail if a signal handler is already present. On Windows, multiple handler routines are allowed,
-/// but they are called on a last-registered, first-called basis until the signal is handled.
+/// On Unix, the handler registration for `SIGINT`, (`SIGTERM` and `SIGHUP` if termination feature
+/// is enabled) or `SA_SIGINFO` posix signal handlers will be overwritten. On Windows, multiple
+/// handler routines are allowed, but they are called on a last-registered, first-called basis
+/// until the signal is handled.
+///
+/// ctrlc::try_set_handler will error (on Unix) if another signal handler exists for the same
+/// signal(s) that ctrlc is trying to attach the handler to.
 ///
 /// On Unix, signal dispositions and signal handlers are inherited by child processes created via
 /// `fork(2)` on, but not by child processes created via `execve(2)`.
 /// Signal handlers are not inherited on Windows.
 ///
 /// # Errors
-/// Will return an error if another `ctrlc::set_handler()` handler exists or if a
-/// system error occurred while setting the handler.
+/// Will return an error if a system error occurred while setting the handler.
 ///
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
-///
 pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
+where
+    F: FnMut() + 'static + Send,
+{
+    init_and_set_handler(user_handler, true)
+}
+
+/// The same as ctrlc::set_handler but errors if a handler already exists for the signal(s).
+///
+/// # Errors
+/// Will return an error if another handler exists or if a system error occurred while setting the
+/// handler.
+pub fn try_set_handler<F>(user_handler: F) -> Result<(), Error>
+where
+    F: FnMut() + 'static + Send,
+{
+    init_and_set_handler(user_handler, false)
+}
+
+fn init_and_set_handler<F>(user_handler: F, overwrite: bool) -> Result<(), Error>
 where
     F: FnMut() + 'static + Send,
 {
@@ -96,7 +117,7 @@ where
         let _guard = INIT_LOCK.lock().unwrap();
 
         if !INIT.load(Ordering::Relaxed) {
-            set_handler_inner(user_handler)?;
+            set_handler_inner(user_handler, overwrite)?;
             INIT.store(true, Ordering::Release);
             return Ok(());
         }
@@ -105,12 +126,12 @@ where
     Err(Error::MultipleHandlers)
 }
 
-fn set_handler_inner<F>(mut user_handler: F) -> Result<(), Error>
+fn set_handler_inner<F>(mut user_handler: F, overwrite: bool) -> Result<(), Error>
 where
     F: FnMut() + 'static + Send,
 {
     unsafe {
-        match platform::init_os_handler() {
+        match platform::init_os_handler(overwrite) {
             Ok(_) => {}
             Err(err) => {
                 return Err(err.into());

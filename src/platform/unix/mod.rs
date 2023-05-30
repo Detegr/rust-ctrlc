@@ -83,7 +83,7 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
-pub unsafe fn init_os_handler() -> Result<(), Error> {
+pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     use nix::fcntl;
     use nix::sys::signal;
 
@@ -113,7 +113,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
         Ok(old) => old,
         Err(e) => return Err(close_pipe(e)),
     };
-    if sigint_old.handler() != signal::SigHandler::SigDfl {
+    if !overwrite && sigint_old.handler() != signal::SigHandler::SigDfl {
         signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
         return Err(close_pipe(nix::Error::EEXIST));
     }
@@ -127,7 +127,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
                 return Err(close_pipe(e));
             }
         };
-        if sigterm_old.handler() != signal::SigHandler::SigDfl {
+        if !overwrite && sigterm_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
             signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
             return Err(close_pipe(nix::Error::EEXIST));
@@ -140,7 +140,7 @@ pub unsafe fn init_os_handler() -> Result<(), Error> {
                 return Err(close_pipe(e));
             }
         };
-        if sighup_old.handler() != signal::SigHandler::SigDfl {
+        if !overwrite && sighup_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
             signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
             signal::sigaction(signal::Signal::SIGHUP, &sighup_old).unwrap();

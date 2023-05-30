@@ -11,9 +11,6 @@
 mod harness;
 use harness::{platform, run_harness};
 
-mod test_signal_hook;
-use test_signal_hook::run_signal_hook;
-
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -42,7 +39,6 @@ fn test_set_handler() {
 
 fn tests() {
     run_tests!(test_set_handler);
-    run_tests!(run_signal_hook);
 }
 
 fn main() {
