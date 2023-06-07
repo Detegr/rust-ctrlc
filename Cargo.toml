@@ -12,6 +12,7 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 exclude = ["/.travis.yml", "/appveyor.yml"]
 edition = "2018"
 readme = "README.md"
+rust-version = "1.63.0"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26", default-features = false, features = ["fs", "signal"]}
@@ -37,3 +38,6 @@ path = "tests/main/issue_97.rs"
 
 [dev-dependencies]
 signal-hook = "0.3"
+
+[badges]
+maintenance = { status = "passively-maintained" }
