@@ -7,6 +7,16 @@ A simple easy to use wrapper around Ctrl-C signal.
 [Documentation](http://detegr.github.io/doc/ctrlc/)
 
 ## Example usage
+
+In `cargo.toml`:
+
+```toml
+[dependencies]
+ctrlc = "3.4.0"
+```
+
+then, in `main.rs`
+
 ```rust
 use std::sync::mpsc::channel;
 use ctrlc;
