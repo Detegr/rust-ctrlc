@@ -10,6 +10,8 @@
 use crate::error::Error as CtrlcError;
 use nix::unistd;
 use std::os::unix::io::RawFd;
+use std::os::fd::IntoRawFd;
+use std::os::fd::BorrowedFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
 
@@ -22,7 +24,8 @@ pub type Signal = nix::sys::signal::Signal;
 extern "C" fn os_handler(_: nix::libc::c_int) {
     // Assuming this always succeeds. Can't really handle errors in any meaningful way.
     unsafe {
-        let _ = unistd::write(PIPE.1, &[0u8]);
+        let fd = BorrowedFd::borrow_raw(PIPE.1);
+        let _ = unistd::write(fd, &[0u8]);
     }
 }
 
@@ -73,7 +76,8 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     target_os = "nto",
 )))]
 fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
-    unistd::pipe2(flags)
+    let pipe = unistd::pipe2(flags)?;
+    Ok((pipe.0.into_raw_fd(), pipe.1.into_raw_fd()))
 }
 
 /// Register os signal handler.
