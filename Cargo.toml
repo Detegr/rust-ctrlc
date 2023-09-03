@@ -10,12 +10,12 @@ categories = ["os"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/Detegr/rust-ctrlc.git"
 exclude = ["/.travis.yml", "/appveyor.yml"]
-edition = "2018"
+edition = "2021"
 readme = "README.md"
-rust-version = "1.63.0"
+rust-version = "1.69.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.27", default-features = false, features = ["fs", "signal"]}
+nix = { version = "0.28", default-features = false, features = ["fs", "signal"]}
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_System_Console"] }
