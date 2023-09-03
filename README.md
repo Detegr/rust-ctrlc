@@ -12,7 +12,7 @@ In `cargo.toml`:
 
 ```toml
 [dependencies]
-ctrlc = "3.4.0"
+ctrlc = "3.4"
 ```
 
 then, in `main.rs`
