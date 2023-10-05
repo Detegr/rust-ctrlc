@@ -1,4 +1,9 @@
 # CtrlC
+
+[![Version](https://img.shields.io/crates/v/ctrlc.svg?style=flat)](https://crates.io/crates/ctrlc)
+[![Documentation](https://img.shields.io/badge/docs-release-brightgreen.svg?style=flat)](https://docs.rs/ctrlc)
+[![Download](https://img.shields.io/crates/d/ctrlc.svg)](https://crates.io/crates/ctrlc)
+[![License](https://img.shields.io/crates/l/ctrlc.svg?style=flat)](https://github.com/Detegr/rust-ctrlc/blob/master/LICENSE-MIT)
 [![Build Status](https://travis-ci.org/Detegr/rust-ctrlc.svg?branch=master)](https://travis-ci.org/Detegr/rust-ctrlc)
 [![Build status](https://ci.appveyor.com/api/projects/status/kwg1uu2w2aqn9ta9/branch/master?svg=true)](https://ci.appveyor.com/project/Detegr/rust-ctrlc/branch/master)
 
@@ -24,12 +29,13 @@ use ctrlc;
 fn main() {
     let (tx, rx) = channel();
     
-    ctrlc::set_handler(move || tx.send(()).expect("Could not send signal on channel."))
+    let handle = ctrlc::set_handler(move || {tx.send(()).expect("Could not send signal on channel."); true})
         .expect("Error setting Ctrl-C handler");
     
     println!("Waiting for Ctrl-C...");
     rx.recv().expect("Could not receive from channel.");
     println!("Got it! Exiting..."); 
+    handle.join().unwarp();
 }
 ```
 

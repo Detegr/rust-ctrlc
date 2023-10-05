@@ -31,13 +31,15 @@
 //!     let running = Arc::new(AtomicBool::new(true));
 //!     let r = running.clone();
 //!
-//!     ctrlc::set_handler(move || {
+//!     let handle = ctrlc::set_handler(move || {
 //!         r.store(false, Ordering::SeqCst);
+//!         true
 //!     }).expect("Error setting Ctrl-C handler");
 //!
 //!     println!("Waiting for Ctrl-C...");
 //!     while running.load(Ordering::SeqCst) {}
 //!     println!("Got it! Exiting...");
+//!     handle.join().unwrap();
 //! }
 //! ```
 //!
@@ -57,7 +59,7 @@ pub use signal::*;
 pub use error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::thread;
+use std::thread::{self, JoinHandle};
 
 static INIT: AtomicBool = AtomicBool::new(false);
 static INIT_LOCK: Mutex<()> = Mutex::new(());
@@ -69,7 +71,7 @@ static INIT_LOCK: Mutex<()> = Mutex::new(());
 ///
 /// # Example
 /// ```no_run
-/// ctrlc::set_handler(|| println!("Hello world!")).expect("Error setting Ctrl-C handler");
+/// ctrlc::set_handler(|| {println!("Hello world!"); true}).expect("Error setting Ctrl-C handler");
 /// ```
 ///
 /// # Warning
@@ -90,9 +92,9 @@ static INIT_LOCK: Mutex<()> = Mutex::new(());
 ///
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
-pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
+pub fn set_handler<F>(user_handler: F) -> Result<JoinHandle<()>, Error>
 where
-    F: FnMut() + 'static + Send,
+    F: FnMut() -> bool + 'static + Send,
 {
     init_and_set_handler(user_handler, true)
 }
@@ -102,33 +104,33 @@ where
 /// # Errors
 /// Will return an error if another handler exists or if a system error occurred while setting the
 /// handler.
-pub fn try_set_handler<F>(user_handler: F) -> Result<(), Error>
+pub fn try_set_handler<F>(user_handler: F) -> Result<JoinHandle<()>, Error>
 where
-    F: FnMut() + 'static + Send,
+    F: FnMut() -> bool + 'static + Send,
 {
     init_and_set_handler(user_handler, false)
 }
 
-fn init_and_set_handler<F>(user_handler: F, overwrite: bool) -> Result<(), Error>
+fn init_and_set_handler<F>(user_handler: F, overwrite: bool) -> Result<JoinHandle<()>, Error>
 where
-    F: FnMut() + 'static + Send,
+    F: FnMut() -> bool + 'static + Send,
 {
     if !INIT.load(Ordering::Acquire) {
         let _guard = INIT_LOCK.lock().unwrap();
 
         if !INIT.load(Ordering::Relaxed) {
-            set_handler_inner(user_handler, overwrite)?;
+            let handle = set_handler_inner(user_handler, overwrite)?;
             INIT.store(true, Ordering::Release);
-            return Ok(());
+            return Ok(handle);
         }
     }
 
     Err(Error::MultipleHandlers)
 }
 
-fn set_handler_inner<F>(mut user_handler: F, overwrite: bool) -> Result<(), Error>
+fn set_handler_inner<F>(mut user_handler: F, overwrite: bool) -> Result<JoinHandle<()>, Error>
 where
-    F: FnMut() + 'static + Send,
+    F: FnMut() -> bool + 'static + Send,
 {
     unsafe {
         match platform::init_os_handler(overwrite) {
@@ -139,15 +141,17 @@ where
         }
     }
 
-    thread::Builder::new()
+    let builder = thread::Builder::new()
         .name("ctrl-c".into())
         .spawn(move || loop {
             unsafe {
                 platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
             }
-            user_handler();
+            if user_handler() {
+                break;
+            }
         })
         .expect("failed to spawn thread");
 
-    Ok(())
+    Ok(builder)
 }

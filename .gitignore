@@ -1,2 +1,4 @@
+.vscode/
+.VSCodeCounter/
 target
 Cargo.lock

@@ -21,6 +21,7 @@ fn test_set_handler() {
     let flag_handler = Arc::clone(&flag);
     ctrlc::set_handler(move || {
         flag_handler.store(true, Ordering::SeqCst);
+        true
     })
     .unwrap();
 
@@ -31,7 +32,7 @@ fn test_set_handler() {
     std::thread::sleep(std::time::Duration::from_millis(100));
     assert!(flag.load(Ordering::SeqCst));
 
-    match ctrlc::set_handler(|| {}) {
+    match ctrlc::set_handler(|| true) {
         Err(ctrlc::Error::MultipleHandlers) => {}
         ret => panic!("{:?}", ret),
     }
