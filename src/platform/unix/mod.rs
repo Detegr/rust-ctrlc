@@ -9,9 +9,9 @@
 
 use crate::error::Error as CtrlcError;
 use nix::unistd;
-use std::os::unix::io::RawFd;
-use std::os::fd::IntoRawFd;
 use std::os::fd::BorrowedFd;
+use std::os::fd::IntoRawFd;
+use std::os::unix::io::RawFd;
 
 static mut PIPE: (RawFd, RawFd) = (-1, -1);
 
