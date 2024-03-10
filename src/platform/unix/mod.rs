@@ -42,6 +42,7 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
 
     let pipe = unistd::pipe()?;
+    let pipe = (pipe.0.into_raw_fd(), pipe.1.into_raw_fd());
 
     let mut res = Ok(0);
 
