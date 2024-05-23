@@ -131,12 +131,7 @@ where
     F: FnMut() + 'static + Send,
 {
     unsafe {
-        match platform::init_os_handler(overwrite) {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(err.into());
-            }
-        }
+        platform::init_os_handler(overwrite)?;
     }
 
     thread::Builder::new()
@@ -147,7 +142,7 @@ where
             }
             user_handler();
         })
-        .expect("failed to spawn thread");
+        .map_err(Error::System)?;
 
     Ok(())
 }
