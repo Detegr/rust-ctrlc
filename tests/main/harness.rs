@@ -88,7 +88,7 @@ pub mod platform {
         fn new() -> io::Result<Output> {
             unsafe {
                 let stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-                if stdout == 0 || stdout == INVALID_HANDLE_VALUE {
+                if stdout.is_null() || stdout == INVALID_HANDLE_VALUE {
                     return Err(io::Error::last_os_error());
                 }
 
@@ -139,7 +139,7 @@ pub mod platform {
             0 as HANDLE,
         );
 
-        if stdout == 0 || stdout == INVALID_HANDLE_VALUE {
+        if stdout.is_null() || stdout == INVALID_HANDLE_VALUE {
             Err(io::Error::last_os_error())
         } else {
             Ok(stdout)
