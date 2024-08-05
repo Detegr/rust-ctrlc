@@ -43,7 +43,7 @@ unsafe extern "system" fn os_handler(_: u32) -> BOOL {
 #[inline]
 pub unsafe fn init_os_handler(_overwrite: bool) -> Result<(), Error> {
     SEMAPHORE = CreateSemaphoreA(ptr::null_mut(), 0, MAX_SEM_COUNT, ptr::null());
-    if SEMAPHORE == 0 {
+    if SEMAPHORE.is_null() {
         return Err(io::Error::last_os_error());
     }
 
