@@ -7,13 +7,12 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
+use std::mem;
 use crate::error::Error as CtrlcError;
 use nix::unistd;
-use std::os::fd::BorrowedFd;
-use std::os::fd::IntoRawFd;
-use std::os::unix::io::RawFd;
+use std::os::fd::{AsFd, AsRawFd, OwnedFd};
 
-static mut PIPE: (RawFd, RawFd) = (-1, -1);
+static mut PIPE: mem::MaybeUninit::<(OwnedFd, OwnedFd)> = mem::MaybeUninit::<(OwnedFd, OwnedFd)>::uninit();
 
 /// Platform specific error type
 pub type Error = nix::Error;
@@ -21,10 +20,13 @@ pub type Error = nix::Error;
 /// Platform specific signal type
 pub type Signal = nix::sys::signal::Signal;
 
+
+#[allow(static_mut_refs)]
 extern "C" fn os_handler(_: nix::libc::c_int) {
     // Assuming this always succeeds. Can't really handle errors in any meaningful way.
     unsafe {
-        let fd = BorrowedFd::borrow_raw(PIPE.1);
+        let pipe = PIPE.assume_init_mut();
+        let fd = pipe.1.as_fd();
         let _ = unistd::write(fd, &[0u8]);
     }
 }
@@ -38,24 +40,24 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
     target_os = "aix",
     target_os = "nto",
 ))]
-fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
+#[allow(static_mut_refs)]
+fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(OwnedFd, OwnedFd)> {
     use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
 
     let pipe = unistd::pipe()?;
-    let pipe = (pipe.0.into_raw_fd(), pipe.1.into_raw_fd());
 
     let mut res = Ok(0);
 
     if flags.contains(OFlag::O_CLOEXEC) {
         res = res
-            .and_then(|_| fcntl(pipe.0, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)))
-            .and_then(|_| fcntl(pipe.1, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)));
+            .and_then(|_| fcntl(pipe.0.as_fd(), FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)))
+            .and_then(|_| fcntl(pipe.1.as_fd(), FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)));
     }
 
     if flags.contains(OFlag::O_NONBLOCK) {
         res = res
-            .and_then(|_| fcntl(pipe.0, FcntlArg::F_SETFL(OFlag::O_NONBLOCK)))
-            .and_then(|_| fcntl(pipe.1, FcntlArg::F_SETFL(OFlag::O_NONBLOCK)));
+            .and_then(|_| fcntl(pipe.0.as_fd(), FcntlArg::F_SETFL(OFlag::O_NONBLOCK)))
+            .and_then(|_| fcntl(pipe.1.as_fd(), FcntlArg::F_SETFL(OFlag::O_NONBLOCK)));
     }
 
     match res {
@@ -76,9 +78,9 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     target_os = "aix",
     target_os = "nto",
 )))]
-fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
-    let pipe = unistd::pipe2(flags)?;
-    Ok((pipe.0.into_raw_fd(), pipe.1.into_raw_fd()))
+#[allow(static_mut_refs)]
+fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(OwnedFd, OwnedFd)> {
+    unistd::pipe2(flags)
 }
 
 /// Register os signal handler.
@@ -90,22 +92,25 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
+#[allow(static_mut_refs)]
 pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     use nix::fcntl;
     use nix::sys::signal;
 
-    PIPE = pipe2(fcntl::OFlag::O_CLOEXEC)?;
+    PIPE.write(pipe2(fcntl::OFlag::O_CLOEXEC)?);
+
+    let pipe = PIPE.assume_init_mut();
 
     let close_pipe = |e: nix::Error| -> Error {
         // Try to close the pipes. close() should not fail,
         // but if it does, there isn't much we can do
-        let _ = unistd::close(PIPE.1);
-        let _ = unistd::close(PIPE.0);
+        let _ = unistd::close(pipe.1.as_raw_fd());
+        let _ = unistd::close(pipe.0.as_raw_fd());
         e
     };
 
     // Make sure we never block on write in the os handler.
-    if let Err(e) = fcntl::fcntl(PIPE.1, fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK)) {
+    if let Err(e) = fcntl::fcntl(pipe.1.as_fd(), fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK)) {
         return Err(close_pipe(e));
     }
 
@@ -171,15 +176,15 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
+#[allow(static_mut_refs)]
 pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
     use std::io;
     let mut buf = [0u8];
 
-    // TODO: Can we safely convert the pipe fd into a std::io::Read
-    // with std::os::unix::io::FromRawFd, this would handle EINTR
-    // and everything for us.
+    let pipe = PIPE.assume_init_mut();
+
     loop {
-        match unistd::read(PIPE.0, &mut buf[..]) {
+        match unistd::read(pipe.0.as_fd(), &mut buf[..]) {
             Ok(1) => break,
             Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into())),
             Err(nix::errno::Errno::EINTR) => {}
