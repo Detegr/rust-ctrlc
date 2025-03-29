@@ -162,6 +162,7 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub unsafe fn deinit_os_handler() -> Result<(), Error> {
     use nix::sys::signal;
 
@@ -181,6 +182,7 @@ pub unsafe fn deinit_os_handler() -> Result<(), Error> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub unsafe fn is_handler_init() -> bool {
     return PIPE.0 != -1 && PIPE.1 != -1;
 }
