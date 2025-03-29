@@ -57,7 +57,7 @@ pub use signal::*;
 pub use error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::thread;
+use std::thread::{self, JoinHandle};
 
 static INIT: AtomicBool = AtomicBool::new(false);
 static INIT_LOCK: Mutex<()> = Mutex::new(());
@@ -145,4 +145,78 @@ where
         .map_err(Error::System)?;
 
     Ok(())
+}
+
+
+/// Same as [`ctrlc::set_handler`], but uses [`std::ops::FnOnce`] as a handler that only handles one interrupt.
+/// 
+/// Register signal handler for Ctrl-C.
+///
+/// Starts a new dedicated signal handling thread. Should only be called at the start of the program, or after 
+/// last `_once`-handler already fired (for example, via `.join()`).
+///
+/// # Example
+/// TODO
+pub fn set_handler_once<F, T>(user_handler: F) -> Result<JoinHandle<F::Output>, Error>
+where
+    F: FnOnce() -> T + 'static + Send,
+    T: 'static + Send
+{
+    init_and_set_handler_once(user_handler, true)
+}
+
+/// The same as [`ctrlc::try_set_handler`] but uses [`std::ops::FnOnce`] as a handler that only handles one interrupt.
+/// The same as [`ctrlc::set_handler_once`] but errors if a handler already exists for the signal(s).
+///
+/// # Errors
+/// Will return an error if another handler exists or if a system error occurred while setting the
+/// handler.
+pub fn try_set_handler_once<F, T>(user_handler: F) -> Result<JoinHandle<F::Output>, Error>
+where
+    F: FnOnce() -> T + 'static + Send,
+    T: 'static + Send
+{
+    init_and_set_handler_once(user_handler, false)
+}
+
+
+fn init_and_set_handler_once<F, T>(user_handler: F, overwrite: bool) -> Result<JoinHandle<F::Output>, Error>
+where
+    F: FnOnce() -> T + 'static + Send,
+    T: 'static + Send
+{
+    if !INIT.load(Ordering::Acquire) {
+        let _guard = INIT_LOCK.lock().unwrap();
+
+        if !INIT.load(Ordering::Relaxed) {
+            let handle = set_handler_inner_once(user_handler, overwrite)?;
+            INIT.store(true, Ordering::Release);
+            return Ok(handle);
+        }
+    }
+
+    Err(Error::MultipleHandlers)
+}
+
+
+fn set_handler_inner_once<F, T>(user_handler: F, overwrite: bool) -> Result<JoinHandle<F::Output>, Error>
+where
+    F: FnOnce() -> T + 'static + Send,
+    T: 'static + Send,
+{
+    unsafe {
+        platform::init_os_handler(overwrite)?;
+    }
+
+    let thread = thread::Builder::new()
+        .name("ctrl-c".into())
+        .spawn(move || {
+            unsafe {
+                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
+            }
+            user_handler()
+        })
+        .map_err(Error::System)?;
+
+    Ok(thread)
 }
