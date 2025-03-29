@@ -11,12 +11,13 @@ use std::io;
 use std::io::ErrorKind;
 use std::ptr;
 
-
 use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HANDLE, WAIT_FAILED, WAIT_OBJECT_0};
 use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
 use windows_sys::Win32::System::Threading::{
     CreateSemaphoreA, ReleaseSemaphore, WaitForSingleObject, INFINITE,
 };
+
+use crate::block_outcome::BlockOutcome;
 
 /// Platform specific error type
 pub type Error = io::Error;
@@ -28,7 +29,7 @@ const MAX_SEM_COUNT: i32 = 65535;
 const TRUE: BOOL = 1;
 const FALSE: BOOL = 0;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OsHandler {
     semaphore: HANDLE,
 }
@@ -104,15 +105,17 @@ pub unsafe fn deinit_os_handler() -> Result<(), Error> {
         HANDLER = None;
         CloseHandle(handler.semaphore);
         SetConsoleCtrlHandler(Some(os_handler), FALSE); // Remove the handler callbalk
-        return Ok(());
+        Ok(())
+    } else {
+        Err(ErrorKind::NotFound.into())
     }
-    Err(ErrorKind::NotFound.into())
 }
 
 pub unsafe fn is_handler_init() -> bool {
     #[allow(static_mut_refs)]
     return HANDLER.is_some();
 }
+
 
 /// Blocks until a Ctrl-C signal is received.
 ///
@@ -122,12 +125,18 @@ pub unsafe fn is_handler_init() -> bool {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
-pub unsafe fn block_ctrl_c() -> Result<(), Error> {
+pub unsafe fn block_ctrl_c() -> Result<BlockOutcome, Error> {
     let handler = HANDLER.ok_or::<Error>(ErrorKind::NotFound.into())?;
 
     match WaitForSingleObject(handler.semaphore, INFINITE) {
-        WAIT_OBJECT_0 => Ok(()),
-        WAIT_FAILED => Err(io::Error::last_os_error()),
+        WAIT_OBJECT_0 => Ok(BlockOutcome::Awaited),
+        WAIT_FAILED => {
+            if Some(handler) != HANDLER {
+                Ok(BlockOutcome::HandlerRemoved)
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        },
         ret => Err(io::Error::new(
             io::ErrorKind::Other,
             format!(

@@ -50,9 +50,11 @@
 
 mod error;
 mod platform;
+use block_outcome::BlockOutcome;
 pub use platform::Signal;
 mod signal;
 pub use signal::*;
+mod block_outcome;
 
 pub use error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -90,7 +92,7 @@ static INIT_LOCK: Mutex<()> = Mutex::new(());
 ///
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
-pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
+pub fn set_handler<F>(user_handler: F) -> Result<JoinHandle<()>, Error>
 where
     F: FnMut() + 'static + Send,
 {
@@ -102,14 +104,14 @@ where
 /// # Errors
 /// Will return an error if another handler exists or if a system error occurred while setting the
 /// handler.
-pub fn try_set_handler<F>(user_handler: F) -> Result<(), Error>
+pub fn try_set_handler<F>(user_handler: F) -> Result<JoinHandle<()>, Error>
 where
     F: FnMut() + 'static + Send,
 {
     init_and_set_handler(user_handler, false)
 }
 
-fn init_and_set_handler<F>(user_handler: F, overwrite: bool) -> Result<(), Error>
+fn init_and_set_handler<F>(user_handler: F, overwrite: bool) -> Result<JoinHandle<()>, Error>
 where
     F: FnMut() + 'static + Send,
 {
@@ -117,16 +119,16 @@ where
         let _guard = INIT_LOCK.lock().unwrap();
 
         if !INIT.load(Ordering::Relaxed) {
-            set_handler_inner(user_handler, overwrite)?;
+            let result = set_handler_inner(user_handler, overwrite)?;
             INIT.store(true, Ordering::Release);
-            return Ok(());
+            return Ok(result);
         }
     }
 
     Err(Error::MultipleHandlers)
 }
 
-fn set_handler_inner<F>(mut user_handler: F, overwrite: bool) -> Result<(), Error>
+fn set_handler_inner<F>(mut user_handler: F, overwrite: bool) -> Result<JoinHandle<()>, Error>
 where
     F: FnMut() + 'static + Send,
 {
@@ -138,13 +140,15 @@ where
         .name("ctrl-c".into())
         .spawn(move || loop {
             unsafe {
-                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
+                match platform::block_ctrl_c() {
+                    Ok(BlockOutcome::Awaited) => {},
+                    Ok(BlockOutcome::HandlerRemoved) => break,
+                    Err(err) => panic!("Critical system error while waiting for Ctrl-C: {err:?}")
+                };
             }
             user_handler();
         })
-        .map_err(Error::System)?;
-
-    Ok(())
+        .map_err(Error::System)
 }
 
 
@@ -156,8 +160,22 @@ where
 /// last `_once`-handler already fired (for example, via `.join()`).
 ///
 /// # Example
-/// TODO
-pub fn set_handler_once<F, T>(user_handler: F) -> Result<JoinHandle<F::Output>, Error>
+/// ```no_run
+/// 
+/// # use ctrlc::*;
+/// 
+/// let fires = 0;
+/// let handle = ctrlc::set_handler_once(move || fires + 1).unwrap();
+/// 
+/// // interrupt_and_wait(); // platform-dependant
+/// 
+/// // First unwrap for thread join, second one to `Option` because handler can be removed without firing.
+/// let fires = handle.join().unwrap().unwrap(); 
+/// assert_eq!(fires, 1);
+/// 
+/// assert!(ctrlc::remove_all_handlers().is_err()); // This handler should be already removed after firing once.
+/// ```
+pub fn set_handler_once<F, T>(user_handler: F) -> Result<JoinHandle<Option<F::Output>>, Error>
 where
     F: FnOnce() -> T + 'static + Send,
     T: 'static + Send
@@ -171,7 +189,7 @@ where
 /// # Errors
 /// Will return an error if another handler exists or if a system error occurred while setting the
 /// handler.
-pub fn try_set_handler_once<F, T>(user_handler: F) -> Result<JoinHandle<F::Output>, Error>
+pub fn try_set_handler_once<F, T>(user_handler: F) -> Result<JoinHandle<Option<F::Output>>, Error>
 where
     F: FnOnce() -> T + 'static + Send,
     T: 'static + Send
@@ -180,7 +198,7 @@ where
 }
 
 
-fn init_and_set_handler_once<F, T>(user_handler: F, overwrite: bool) -> Result<JoinHandle<F::Output>, Error>
+fn init_and_set_handler_once<F, T>(user_handler: F, overwrite: bool) -> Result<JoinHandle<Option<F::Output>>, Error>
 where
     F: FnOnce() -> T + 'static + Send,
     T: 'static + Send
@@ -199,7 +217,7 @@ where
 }
 
 
-fn set_handler_inner_once<F, T>(user_handler: F, overwrite: bool) -> Result<JoinHandle<F::Output>, Error>
+fn set_handler_inner_once<F, T>(user_handler: F, overwrite: bool) -> Result<JoinHandle<Option<F::Output>>, Error>
 where
     F: FnOnce() -> T + 'static + Send,
     T: 'static + Send,
@@ -211,12 +229,34 @@ where
     let thread = thread::Builder::new()
         .name("ctrl-c".into())
         .spawn(move || {
-            unsafe {
-                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
+            let outcome = unsafe {
+                platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C")
+            };
+            if outcome == BlockOutcome::HandlerRemoved {
+                return None;
             }
-            user_handler()
+            let result = user_handler();
+
+            match remove_all_handlers() {
+                Ok(()) |
+                Err(Error::HandlerRemoved) => {},
+                _ => eprintln!("[ctrlc] System error after waiting for Ctrl-C"),
+            };
+            Some(result)
         })
         .map_err(Error::System)?;
 
     Ok(thread)
+}
+
+/// Removes all previously added handlers
+pub fn remove_all_handlers() -> Result<(), Error> {
+    if !INIT.load(Ordering::Acquire) {
+        return Err(Error::HandlerRemoved);
+    }
+    unsafe {
+        platform::deinit_os_handler()?;
+        INIT.store(false, Ordering::Relaxed);
+    }
+    Ok(())
 }

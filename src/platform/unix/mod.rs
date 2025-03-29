@@ -7,6 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
+use crate::block_outcome::BlockOutcome;
 use crate::error::Error as CtrlcError;
 use nix::sys::signal::SigAction;
 use nix::sys::signal::SigHandler;
@@ -86,6 +87,7 @@ unsafe fn close_pipe() {
     // but if it does, there isn't much we can do
     let _ = unistd::close(PIPE.1);
     let _ = unistd::close(PIPE.0);
+    PIPE = (-1, -1);
 }
 
 /// Register os signal handler.
@@ -100,7 +102,7 @@ unsafe fn close_pipe() {
 pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     use nix::fcntl;
     use nix::sys::signal;
-
+    
     PIPE = pipe2(fcntl::OFlag::O_CLOEXEC)?;
 
     // Make sure we never block on write in the os handler.
@@ -165,6 +167,9 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
 #[allow(dead_code)]
 pub unsafe fn deinit_os_handler() -> Result<(), Error> {
     use nix::sys::signal;
+    if !is_handler_init() {
+        return Err(nix::Error::ENOENT);
+    }
 
     let new_action = sig_handler_to_sig_action(signal::SigHandler::SigDfl);
 
@@ -175,9 +180,7 @@ pub unsafe fn deinit_os_handler() -> Result<(), Error> {
         let _ = signal::sigaction(signal::Signal::SIGTERM, &new_action);
         let _ = signal::sigaction(signal::Signal::SIGHUP, &new_action);
     }
-
     close_pipe();
-    PIPE = (-1, -1);
 
     Ok(())
 }
@@ -212,21 +215,25 @@ unsafe fn sig_handler_to_sig_action(handler: SigHandler) -> SigAction {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
-pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
-    use std::io;
+pub unsafe fn block_ctrl_c() -> Result<BlockOutcome, CtrlcError> {
     let mut buf = [0u8];
 
     // TODO: Can we safely convert the pipe fd into a std::io::Read
     // with std::os::unix::io::FromRawFd, this would handle EINTR
     // and everything for us.
     loop {
-        match unistd::read(PIPE.0, &mut buf[..]) {
+        let pipe = std::ptr::read_volatile(&raw const PIPE);
+        match unistd::read(pipe.0, &mut buf[..]) {
             Ok(1) => break,
-            Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into())),
+
+            Ok(_) |
+            Err(nix::errno::Errno::EBADF)
+                => return Ok(BlockOutcome::HandlerRemoved),
+
             Err(nix::errno::Errno::EINTR) => {}
             Err(e) => return Err(e.into()),
         }
     }
 
-    Ok(())
+    Ok(BlockOutcome::Awaited)
 }
