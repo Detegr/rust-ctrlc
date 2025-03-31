@@ -105,7 +105,7 @@ pub unsafe fn deinit_os_handler() -> Result<(), Error> {
     if let Some(handler) = HANDLER {
         HANDLER = None;
         CloseHandle(handler.semaphore);
-        SetConsoleCtrlHandler(Some(os_handler), FALSE); // Remove the handler callbalk
+        SetConsoleCtrlHandler(Some(os_handler), FALSE); // Remove the handler callback
         Ok(())
     } else {
         Err(ErrorKind::NotFound.into())
