@@ -79,7 +79,8 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
         handlers_removed += 1;
     }
     if handlers_removed > 0 {
-        // This does not directly 
+        // This does not interfere with our ability to add handlers, but it is unexpected for there
+        // to be more than one.
         eprintln!(
             "[ctrlc] Somehow {handlers_removed} other OS {} of `ctrlc` was added before. Probably a bug.", 
             if handlers_removed == 1 { "handler" } else { "handlers" }
