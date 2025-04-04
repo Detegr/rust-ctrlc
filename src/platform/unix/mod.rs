@@ -7,7 +7,10 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
+use crate::block_outcome::BlockOutcome;
 use crate::error::Error as CtrlcError;
+use nix::sys::signal::SigAction;
+use nix::sys::signal::SigHandler;
 use nix::unistd;
 use std::os::fd::BorrowedFd;
 use std::os::fd::IntoRawFd;
@@ -79,6 +82,14 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
     Ok((pipe.0.into_raw_fd(), pipe.1.into_raw_fd()))
 }
 
+unsafe fn close_pipe() {
+    // Try to close the pipes. close() should not fail,
+    // but if it does, there isn't much we can do
+    let _ = unistd::close(PIPE.1);
+    let _ = unistd::close(PIPE.0);
+    PIPE = (-1, -1);
+}
+
 /// Register os signal handler.
 ///
 /// Must be called before calling [`block_ctrl_c()`](fn.block_ctrl_c.html)
@@ -91,41 +102,29 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     use nix::fcntl;
     use nix::sys::signal;
-
+    
     PIPE = pipe2(fcntl::OFlag::O_CLOEXEC)?;
-
-    let close_pipe = |e: nix::Error| -> Error {
-        // Try to close the pipes. close() should not fail,
-        // but if it does, there isn't much we can do
-        let _ = unistd::close(PIPE.1);
-        let _ = unistd::close(PIPE.0);
-        e
-    };
 
     // Make sure we never block on write in the os handler.
     if let Err(e) = fcntl::fcntl(PIPE.1, fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK)) {
-        return Err(close_pipe(e));
+        close_pipe();
+        return Err(e);
     }
 
     let handler = signal::SigHandler::Handler(os_handler);
-    #[cfg(not(target_os = "nto"))]
-    let new_action = signal::SigAction::new(
-        handler,
-        signal::SaFlags::SA_RESTART,
-        signal::SigSet::empty(),
-    );
-    // SA_RESTART is not supported on QNX Neutrino 7.1 and before
-    #[cfg(target_os = "nto")]
-    let new_action =
-        signal::SigAction::new(handler, signal::SaFlags::empty(), signal::SigSet::empty());
+    let new_action = sig_handler_to_sig_action(handler);
 
     let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
         Ok(old) => old,
-        Err(e) => return Err(close_pipe(e)),
+        Err(e) => {
+            close_pipe();
+            return Err(e)
+        }
     };
     if !overwrite && sigint_old.handler() != signal::SigHandler::SigDfl {
         signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
-        return Err(close_pipe(nix::Error::EEXIST));
+        close_pipe();
+        return Err(nix::Error::EEXIST);
     }
 
     #[cfg(feature = "termination")]
@@ -134,31 +133,78 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
             Ok(old) => old,
             Err(e) => {
                 signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
-                return Err(close_pipe(e));
+                close_pipe();
+                return Err(e);
             }
         };
         if !overwrite && sigterm_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
             signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
-            return Err(close_pipe(nix::Error::EEXIST));
+            close_pipe();
+            return Err(nix::Error::EEXIST);
         }
         let sighup_old = match signal::sigaction(signal::Signal::SIGHUP, &new_action) {
             Ok(old) => old,
             Err(e) => {
                 signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
                 signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
-                return Err(close_pipe(e));
+                close_pipe();
+                return Err(e);
             }
         };
         if !overwrite && sighup_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
             signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
             signal::sigaction(signal::Signal::SIGHUP, &sighup_old).unwrap();
-            return Err(close_pipe(nix::Error::EEXIST));
+            close_pipe();
+            return Err(nix::Error::EEXIST);
         }
     }
 
     Ok(())
+}
+
+#[allow(dead_code)]
+pub unsafe fn deinit_os_handler() -> Result<(), Error> {
+    use nix::sys::signal;
+    if !is_handler_init() {
+        return Err(nix::Error::ENOENT);
+    }
+
+    let new_action = sig_handler_to_sig_action(signal::SigHandler::SigDfl);
+
+    let _ = signal::sigaction(signal::Signal::SIGINT, &new_action);
+
+    #[cfg(feature = "termination")]
+    {
+        let _ = signal::sigaction(signal::Signal::SIGTERM, &new_action);
+        let _ = signal::sigaction(signal::Signal::SIGHUP, &new_action);
+    }
+    close_pipe();
+
+    Ok(())
+}
+
+#[allow(dead_code)]
+pub unsafe fn is_handler_init() -> bool {
+    return PIPE.0 != -1 && PIPE.1 != -1;
+}
+
+unsafe fn sig_handler_to_sig_action(handler: SigHandler) -> SigAction {
+    use nix::sys::signal;
+
+    #[cfg(not(target_os = "nto"))]
+    let action = signal::SigAction::new(
+        handler,
+        signal::SaFlags::SA_RESTART,
+        signal::SigSet::empty(),
+    );
+    
+    // SA_RESTART is not supported on QNX Neutrino 7.1 and before
+    #[cfg(target_os = "nto")]
+    let action = signal::SigAction::new(handler, signal::SaFlags::empty(), signal::SigSet::empty());
+
+    action
 }
 
 /// Blocks until a Ctrl-C signal is received.
@@ -169,21 +215,25 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
 /// Will return an error if a system error occurred.
 ///
 #[inline]
-pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
-    use std::io;
+pub unsafe fn block_ctrl_c() -> Result<BlockOutcome, CtrlcError> {
     let mut buf = [0u8];
 
     // TODO: Can we safely convert the pipe fd into a std::io::Read
     // with std::os::unix::io::FromRawFd, this would handle EINTR
     // and everything for us.
     loop {
-        match unistd::read(PIPE.0, &mut buf[..]) {
+        let pipe = std::ptr::read_volatile(&raw const PIPE);
+        match unistd::read(pipe.0, &mut buf[..]) {
             Ok(1) => break,
-            Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into())),
+
+            Ok(_) |
+            Err(nix::errno::Errno::EBADF)
+                => return Ok(BlockOutcome::HandlerRemoved),
+
             Err(nix::errno::Errno::EINTR) => {}
             Err(e) => return Err(e.into()),
         }
     }
 
-    Ok(())
+    Ok(BlockOutcome::Awaited)
 }

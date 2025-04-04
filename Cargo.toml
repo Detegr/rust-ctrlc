@@ -36,6 +36,11 @@ harness = false
 name = "issue_97"
 path = "tests/main/issue_97.rs"
 
+[[test]]
+harness = false
+name = "deinit"
+path = "tests/main/deinit.rs"
+
 [dev-dependencies]
 signal-hook = "0.3"
 

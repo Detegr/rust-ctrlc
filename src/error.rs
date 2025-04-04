@@ -10,6 +10,8 @@ pub enum Error {
     MultipleHandlers,
     /// Unexpected system error.
     System(std::io::Error),
+    /// Handler was removed
+    HandlerRemoved,
 }
 
 impl Error {
@@ -18,6 +20,7 @@ impl Error {
             Error::NoSuchSignal(_) => "Signal could not be found from the system",
             Error::MultipleHandlers => "Ctrl-C signal handler already registered",
             Error::System(_) => "Unexpected system error",
+            Error::HandlerRemoved => "Handler was removed",
         }
     }
 }
