@@ -42,30 +42,17 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 
     let pipe = unistd::pipe()?;
 
-    let mut res = Ok(0);
-
     if flags.contains(OFlag::O_CLOEXEC) {
-        res = res
-            .and_then(|_| fcntl(&pipe.0, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)))
-            .and_then(|_| fcntl(&pipe.1, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)));
+        fcntl(&pipe.0, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
+        fcntl(&pipe.1, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
     }
 
     if flags.contains(OFlag::O_NONBLOCK) {
-        res = res
-            .and_then(|_| fcntl(&pipe.0, FcntlArg::F_SETFL(OFlag::O_NONBLOCK)))
-            .and_then(|_| fcntl(&pipe.1, FcntlArg::F_SETFL(OFlag::O_NONBLOCK)));
+        fcntl(&pipe.0, FcntlArg::F_SETFL(OFlag::O_NONBLOCK))?;
+        fcntl(&pipe.1, FcntlArg::F_SETFL(OFlag::O_NONBLOCK))?;
     }
 
-    let pipe = (pipe.0.into_raw_fd(), pipe.1.into_raw_fd());
-
-    match res {
-        Ok(_) => Ok(pipe),
-        Err(e) => {
-            let _ = unistd::close(pipe.0);
-            let _ = unistd::close(pipe.1);
-            Err(e)
-        }
-    }
+    Ok((pipe.0.into_raw_fd(), pipe.1.into_raw_fd()))
 }
 
 #[inline]
@@ -104,7 +91,10 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     };
 
     // Make sure we never block on write in the os handler.
-    if let Err(e) = fcntl::fcntl(BorrowedFd::borrow_raw(PIPE.1), fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK)) {
+    if let Err(e) = fcntl::fcntl(
+        BorrowedFd::borrow_raw(PIPE.1),
+        fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK),
+    ) {
         return Err(close_pipe(e));
     }
 
