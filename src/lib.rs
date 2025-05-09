@@ -90,11 +90,18 @@ static INIT_LOCK: Mutex<()> = Mutex::new(());
 ///
 /// # Panics
 /// Any panic in the handler will not be caught and will cause the signal handler thread to stop.
-pub fn set_handler<F>(user_handler: F) -> Result<(), Error>
+pub fn set_handler<F>(mut user_handler: F) -> Result<(), Error>
 where
     F: FnMut() + 'static + Send,
 {
-    init_and_set_handler(user_handler, true)
+    init_and_set_handler(
+        move || {
+            user_handler();
+            false
+        },
+        true,
+        StaticExecutor,
+    )
 }
 
 /// The same as ctrlc::set_handler but errors if a handler already exists for the signal(s).
@@ -102,22 +109,109 @@ where
 /// # Errors
 /// Will return an error if another handler exists or if a system error occurred while setting the
 /// handler.
-pub fn try_set_handler<F>(user_handler: F) -> Result<(), Error>
+pub fn try_set_handler<F>(mut user_handler: F) -> Result<(), Error>
 where
     F: FnMut() + 'static + Send,
 {
-    init_and_set_handler(user_handler, false)
+    init_and_set_handler(
+        move || {
+            user_handler();
+            false
+        },
+        false,
+        StaticExecutor,
+    )
 }
 
-fn init_and_set_handler<F>(user_handler: F, overwrite: bool) -> Result<(), Error>
+/// Register a scoped Ctrl-C signal handler.
+///
+/// This function registers a Ctrl-C (SIGINT) signal handler using a scoped thread context,
+/// allowing the use of non-`'static` closures. This is particularly useful for managing
+/// state that lives within the scope of a thread, without requiring `Arc` or other
+/// heap-allocated synchronization primitives.
+///
+/// Unlike [`ctrlc::set_handler`] or [`ctrlc::try_set_handler`], the provided handler does not need to be `'static`,
+/// as it is guaranteed not to outlive the given [`std::thread::Scope`].
+///
+/// # Example
+///
+/// ```no_run
+/// use std::sync::atomic::{AtomicBool, Ordering};
+/// use std::thread;
+///
+/// let flag = AtomicBool::new(false);
+/// thread::scope(|s| {
+///     ctrlc::try_set_scoped_handler(s, || {
+///         // Because the handler is scoped, we can use non-'static references.
+///         flag.store(true, Ordering::SeqCst);
+///         true // Returning `true` ensures the handler will not be invoked again.
+///     }).unwrap();
+///
+///     // Do some work...
+/// });
+/// ```
+///
+/// > **Note**: Unlike `set_handler`, this function requires that the signal handler
+/// > eventually terminate. If the handler returns `false`, the signal handler thread
+/// > continues running, and the enclosing scope will never complete. Always ensure that
+/// > the handler returns `true` at some point.
+///
+/// # Semantics
+///
+/// - The handler must return a `bool`, indicating whether the handler should be de-registered:
+///   - `true`: the handler is removed and will not be called again.
+///   - `false`: the handler remains active and will be called again on subsequent signals.
+/// - This design ensures that the enclosing thread scope can only exit once the handler
+///   has completed and returned `true`.
+///
+/// # Limitations
+///
+/// - Only one scoped handler may be registered per process.
+/// - If a handler is already registered (scoped or static), this function will return an error.
+/// - There is **no** `set_scoped_handler`; a scoped handler cannot be replaced once registered,
+///   even if it has already finished executing.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A handler is already registered (scoped or static).
+/// - A system-level error occurs during signal handler installation.
+///
+/// # Panics
+///
+/// If the handler panics, the signal handling thread will terminate and not be restarted. This
+/// may leave the program in a state where no Ctrl-C handler is installed.
+///
+/// # Safety
+///
+/// The handler is executed in a separate thread, so ensure that shared state is synchronized
+/// appropriately.
+///
+/// See also: [`try_set_handler`] for a `'static` version of this API.
+pub fn try_set_scoped_handler<'scope, 'f: 'scope, 'env, F>(
+    scope: &'scope thread::Scope<'scope, 'env>,
+    user_handler: F,
+) -> Result<(), Error>
 where
-    F: FnMut() + 'static + Send,
+    F: FnMut() -> bool + 'f + Send,
+{
+    init_and_set_handler(user_handler, false, ScopedExecutor { scope })
+}
+
+fn init_and_set_handler<'scope, 'f: 'scope, F, E>(
+    user_handler: F,
+    overwrite: bool,
+    executor: E,
+) -> Result<(), Error>
+where
+    F: FnMut() -> bool + 'f + Send,
+    E: Executor<'scope>,
 {
     if !INIT.load(Ordering::Acquire) {
         let _guard = INIT_LOCK.lock().unwrap();
 
         if !INIT.load(Ordering::Relaxed) {
-            set_handler_inner(user_handler, overwrite)?;
+            set_handler_inner(user_handler, overwrite, executor)?;
             INIT.store(true, Ordering::Release);
             return Ok(());
         }
@@ -126,23 +220,61 @@ where
     Err(Error::MultipleHandlers)
 }
 
-fn set_handler_inner<F>(mut user_handler: F, overwrite: bool) -> Result<(), Error>
+fn set_handler_inner<'scope, 'f: 'scope, F, E>(
+    mut user_handler: F,
+    overwrite: bool,
+    executor: E,
+) -> Result<(), Error>
 where
-    F: FnMut() + 'static + Send,
+    F: FnMut() -> bool + 'f + Send,
+    E: Executor<'scope>,
 {
     unsafe {
         platform::init_os_handler(overwrite)?;
     }
 
-    thread::Builder::new()
-        .name("ctrl-c".into())
-        .spawn(move || loop {
+    let builder = thread::Builder::new().name("ctrl-c".into());
+    executor
+        .spawn(builder, move || loop {
             unsafe {
                 platform::block_ctrl_c().expect("Critical system error while waiting for Ctrl-C");
             }
-            user_handler();
+            let finished = user_handler();
+            if finished {
+                break;
+            }
         })
         .map_err(Error::System)?;
 
     Ok(())
+}
+
+trait Executor<'scope> {
+    fn spawn<F>(self, builder: thread::Builder, f: F) -> Result<(), std::io::Error>
+    where
+        F: FnOnce() + Send + 'scope;
+}
+
+struct ScopedExecutor<'scope, 'env: 'scope> {
+    scope: &'scope thread::Scope<'scope, 'env>,
+}
+impl<'scope, 'env: 'scope> Executor<'scope> for ScopedExecutor<'scope, 'env> {
+    fn spawn<F>(self, builder: thread::Builder, f: F) -> Result<(), std::io::Error>
+    where
+        F: FnOnce() + Send + 'scope,
+    {
+        builder.spawn_scoped(self.scope, f)?;
+        Ok(())
+    }
+}
+
+struct StaticExecutor;
+impl Executor<'static> for StaticExecutor {
+    fn spawn<F>(self, builder: thread::Builder, f: F) -> Result<(), std::io::Error>
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        builder.spawn(f)?;
+        Ok(())
+    }
 }
