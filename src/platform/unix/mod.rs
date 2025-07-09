@@ -9,8 +9,43 @@
 
 use crate::error::Error as CtrlcError;
 
-static mut SEMAPHORE: nix::libc::sem_t = unsafe { std::mem::zeroed() };
-const SEM_THREAD_SHARED: nix::libc::c_int = 0;
+#[cfg(not(target_vendor = "apple"))]
+#[allow(static_mut_refs)] // rust-version = "1.69.0"
+mod implementation {
+    static mut SEMAPHORE: nix::libc::sem_t = unsafe { std::mem::zeroed() };
+    const SEM_THREAD_SHARED: nix::libc::c_int = 0;
+
+    pub unsafe fn sem_init() {
+        nix::libc::sem_init(&mut SEMAPHORE as *mut _, SEM_THREAD_SHARED, 0);
+    }
+
+    pub unsafe fn sem_post() {
+        // No errors apply. EOVERFLOW is hypothetically possible but it's equivalent to a success for our oneshot use-case.
+        let _ = nix::libc::sem_post(&mut SEMAPHORE as *mut _);
+    }
+
+    pub unsafe fn sem_wait_forever() {
+        // The only realistic error is EINTR, which is restartable.
+        while nix::libc::sem_wait(&mut SEMAPHORE as *mut _) == -1 {}
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+mod implementation {
+    static mut SEMAPHORE: dispatch::ffi::dispatch_semaphore_t = std::ptr::null_mut();
+
+    pub unsafe fn sem_init() {
+        SEMAPHORE = dispatch::ffi::dispatch_semaphore_create(0);
+    }
+
+    pub unsafe fn sem_post() {
+        dispatch::ffi::dispatch_semaphore_signal(SEMAPHORE);
+    }
+
+    pub unsafe fn sem_wait_forever() {
+        dispatch::ffi::dispatch_semaphore_wait(SEMAPHORE, dispatch::ffi::DISPATCH_TIME_FOREVER);
+    }
+}
 
 /// Platform specific error type
 pub type Error = nix::Error;
@@ -20,8 +55,7 @@ pub type Signal = nix::sys::signal::Signal;
 
 extern "C" fn os_handler(_: nix::libc::c_int) {
     unsafe {
-        // No errors apply. EOVERFLOW is hypothetically possible but it's equivalent to a success for our oneshot use-case.
-        let _ = nix::libc::sem_post(&raw mut SEMAPHORE);
+        implementation::sem_post();
     }
 }
 
@@ -37,7 +71,7 @@ extern "C" fn os_handler(_: nix::libc::c_int) {
 pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     use nix::sys::signal;
 
-    nix::libc::sem_init(&raw mut SEMAPHORE, SEM_THREAD_SHARED, 0);
+    implementation::sem_init();
 
     let handler = signal::SigHandler::Handler(os_handler);
     #[cfg(not(target_os = "nto"))]
@@ -99,7 +133,6 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
 ///
 #[inline]
 pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
-    // The only realistic error is EINTR, which is restartable.
-    while nix::libc::sem_wait(&raw mut SEMAPHORE) == -1 {}
+    implementation::sem_wait_forever();
     Ok(())
 }
