@@ -8,12 +8,9 @@
 // according to those terms.
 
 use crate::error::Error as CtrlcError;
-use nix::unistd;
-use std::os::fd::BorrowedFd;
-use std::os::fd::IntoRawFd;
-use std::os::unix::io::RawFd;
 
-static mut PIPE: (RawFd, RawFd) = (-1, -1);
+static mut SEMAPHORE: nix::libc::sem_t = unsafe { std::mem::zeroed() };
+const SEM_THREAD_SHARED: nix::libc::c_int = 0;
 
 /// Platform specific error type
 pub type Error = nix::Error;
@@ -22,49 +19,10 @@ pub type Error = nix::Error;
 pub type Signal = nix::sys::signal::Signal;
 
 extern "C" fn os_handler(_: nix::libc::c_int) {
-    // Assuming this always succeeds. Can't really handle errors in any meaningful way.
     unsafe {
-        let fd = BorrowedFd::borrow_raw(PIPE.1);
-        let _ = unistd::write(fd, &[0u8]);
+        // No errors apply. EOVERFLOW is hypothetically possible but it's equivalent to a success for our oneshot use-case.
+        let _ = nix::libc::sem_post(&raw mut SEMAPHORE);
     }
-}
-
-// pipe2(2) is not available on macOS, iOS, AIX, Haiku, etc., so we need to use pipe(2) and fcntl(2)
-#[inline]
-#[cfg(any(
-    target_vendor = "apple",
-    target_os = "haiku",
-    target_os = "aix",
-    target_os = "nto",
-))]
-fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
-    use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
-
-    let pipe = unistd::pipe()?;
-
-    if flags.contains(OFlag::O_CLOEXEC) {
-        fcntl(&pipe.0, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
-        fcntl(&pipe.1, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
-    }
-
-    if flags.contains(OFlag::O_NONBLOCK) {
-        fcntl(&pipe.0, FcntlArg::F_SETFL(OFlag::O_NONBLOCK))?;
-        fcntl(&pipe.1, FcntlArg::F_SETFL(OFlag::O_NONBLOCK))?;
-    }
-
-    Ok((pipe.0.into_raw_fd(), pipe.1.into_raw_fd()))
-}
-
-#[inline]
-#[cfg(not(any(
-    target_vendor = "apple",
-    target_os = "haiku",
-    target_os = "aix",
-    target_os = "nto",
-)))]
-fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
-    let pipe = unistd::pipe2(flags)?;
-    Ok((pipe.0.into_raw_fd(), pipe.1.into_raw_fd()))
 }
 
 /// Register os signal handler.
@@ -77,26 +35,9 @@ fn pipe2(flags: nix::fcntl::OFlag) -> nix::Result<(RawFd, RawFd)> {
 ///
 #[inline]
 pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
-    use nix::fcntl;
     use nix::sys::signal;
 
-    PIPE = pipe2(fcntl::OFlag::O_CLOEXEC)?;
-
-    let close_pipe = |e: nix::Error| -> Error {
-        // Try to close the pipes. close() should not fail,
-        // but if it does, there isn't much we can do
-        let _ = unistd::close(PIPE.1);
-        let _ = unistd::close(PIPE.0);
-        e
-    };
-
-    // Make sure we never block on write in the os handler.
-    if let Err(e) = fcntl::fcntl(
-        BorrowedFd::borrow_raw(PIPE.1),
-        fcntl::FcntlArg::F_SETFL(fcntl::OFlag::O_NONBLOCK),
-    ) {
-        return Err(close_pipe(e));
-    }
+    nix::libc::sem_init(&raw mut SEMAPHORE, SEM_THREAD_SHARED, 0);
 
     let handler = signal::SigHandler::Handler(os_handler);
     #[cfg(not(target_os = "nto"))]
@@ -110,13 +51,10 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
     let new_action =
         signal::SigAction::new(handler, signal::SaFlags::empty(), signal::SigSet::empty());
 
-    let sigint_old = match signal::sigaction(signal::Signal::SIGINT, &new_action) {
-        Ok(old) => old,
-        Err(e) => return Err(close_pipe(e)),
-    };
+    let sigint_old = signal::sigaction(signal::Signal::SIGINT, &new_action)?;
     if !overwrite && sigint_old.handler() != signal::SigHandler::SigDfl {
         signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
-        return Err(close_pipe(nix::Error::EEXIST));
+        return Err(nix::Error::EEXIST);
     }
 
     #[cfg(feature = "termination")]
@@ -125,27 +63,27 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
             Ok(old) => old,
             Err(e) => {
                 signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
-                return Err(close_pipe(e));
+                return Err(e);
             }
         };
         if !overwrite && sigterm_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
             signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
-            return Err(close_pipe(nix::Error::EEXIST));
+            return Err(nix::Error::EEXIST);
         }
         let sighup_old = match signal::sigaction(signal::Signal::SIGHUP, &new_action) {
             Ok(old) => old,
             Err(e) => {
                 signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
                 signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
-                return Err(close_pipe(e));
+                return Err(e);
             }
         };
         if !overwrite && sighup_old.handler() != signal::SigHandler::SigDfl {
             signal::sigaction(signal::Signal::SIGINT, &sigint_old).unwrap();
             signal::sigaction(signal::Signal::SIGTERM, &sigterm_old).unwrap();
             signal::sigaction(signal::Signal::SIGHUP, &sighup_old).unwrap();
-            return Err(close_pipe(nix::Error::EEXIST));
+            return Err(nix::Error::EEXIST);
         }
     }
 
@@ -157,24 +95,11 @@ pub unsafe fn init_os_handler(overwrite: bool) -> Result<(), Error> {
 /// Must be called after calling [`init_os_handler()`](fn.init_os_handler.html).
 ///
 /// # Errors
-/// Will return an error if a system error occurred.
+/// None.
 ///
 #[inline]
 pub unsafe fn block_ctrl_c() -> Result<(), CtrlcError> {
-    use std::io;
-    let mut buf = [0u8];
-
-    // TODO: Can we safely convert the pipe fd into a std::io::Read
-    // with std::os::unix::io::FromRawFd, this would handle EINTR
-    // and everything for us.
-    loop {
-        match unistd::read(BorrowedFd::borrow_raw(PIPE.0), &mut buf[..]) {
-            Ok(1) => break,
-            Ok(_) => return Err(CtrlcError::System(io::ErrorKind::UnexpectedEof.into())),
-            Err(nix::errno::Errno::EINTR) => {}
-            Err(e) => return Err(e.into()),
-        }
-    }
-
+    // The only realistic error is EINTR, which is restartable.
+    while nix::libc::sem_wait(&raw mut SEMAPHORE) == -1 {}
     Ok(())
 }
