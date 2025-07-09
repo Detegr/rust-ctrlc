@@ -42,7 +42,7 @@
 //! ```
 //!
 //! # Handling SIGTERM and SIGHUP
-//! Handling of `SIGTERM and SIGHUP` can be enabled with `termination` feature. If this is enabled,
+//! Handling of `SIGTERM` and `SIGHUP` can be enabled with `termination` feature. If this is enabled,
 //! the handler specified by `set_handler()` will be executed for `SIGINT`, `SIGTERM` and `SIGHUP`.
 //!
 
