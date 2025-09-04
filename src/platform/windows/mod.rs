@@ -9,7 +9,8 @@
 
 use std::io;
 use std::ptr;
-use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HANDLE, WAIT_FAILED, WAIT_OBJECT_0};
+use windows_sys::core::BOOL;
+use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_FAILED, WAIT_OBJECT_0};
 use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
 use windows_sys::Win32::System::Threading::{
     CreateSemaphoreA, ReleaseSemaphore, WaitForSingleObject, INFINITE,
