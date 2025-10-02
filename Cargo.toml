@@ -36,6 +36,11 @@ path = "tests/main/mod.rs"
 
 [[test]]
 harness = false
+name = "mod_scoped"
+path = "tests/main/mod_scoped.rs"
+
+[[test]]
+harness = false
 name = "issue_97"
 path = "tests/main/issue_97.rs"
 
