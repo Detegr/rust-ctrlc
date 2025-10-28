@@ -32,18 +32,22 @@ mod implementation {
 
 #[cfg(target_vendor = "apple")]
 mod implementation {
-    static mut SEMAPHORE: dispatch::ffi::dispatch_semaphore_t = std::ptr::null_mut();
+    use dispatch2::{DispatchRetained, DispatchSemaphore, DispatchTime};
+
+    static mut SEMAPHORE: Option<DispatchRetained<DispatchSemaphore>> = None;
 
     pub unsafe fn sem_init() {
-        SEMAPHORE = dispatch::ffi::dispatch_semaphore_create(0);
+        SEMAPHORE = Some(DispatchSemaphore::new(0));
     }
 
+    #[allow(static_mut_refs)]
     pub unsafe fn sem_post() {
-        dispatch::ffi::dispatch_semaphore_signal(SEMAPHORE);
+        SEMAPHORE.as_deref().unwrap().signal();
     }
 
+    #[allow(static_mut_refs)]
     pub unsafe fn sem_wait_forever() {
-        dispatch::ffi::dispatch_semaphore_wait(SEMAPHORE, dispatch::ffi::DISPATCH_TIME_FOREVER);
+        SEMAPHORE.as_deref().unwrap().wait(DispatchTime::FOREVER);
     }
 }
 
