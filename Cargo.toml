@@ -18,7 +18,7 @@ rust-version = "1.69.0"
 nix = { version = "0.30", default-features = false, features = ["signal"]}
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
-dispatch = "0.2"
+dispatch2 = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_System_Console"] }
