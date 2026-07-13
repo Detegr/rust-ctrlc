@@ -18,3 +18,9 @@ pub use self::unix::*;
 
 #[cfg(windows)]
 pub use self::windows::*;
+
+#[cfg(target_os = "motor")]
+mod motor;
+
+#[cfg(target_os = "motor")]
+pub use self::motor::*;
