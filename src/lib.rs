@@ -47,7 +47,6 @@
 //!
 
 #[macro_use]
-
 mod error;
 mod platform;
 pub use platform::Signal;
