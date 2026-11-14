@@ -11,7 +11,7 @@ repository = "https://github.com/Detegr/rust-ctrlc.git"
 exclude = ["/.travis.yml", "/appveyor.yml"]
 edition = "2021"
 readme = "README.md"
-rust-version = "1.71"
+rust-version = "1.69"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = ">=0.30.0, <0.33.0", default-features = false, features = ["signal"]}
@@ -20,10 +20,10 @@ nix = { version = ">=0.30.0, <0.33.0", default-features = false, features = ["si
 dispatch2 = "0.3"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = ">=0.60, <0.62", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_System_Console"] }
+windows-sys = { version = ">=0.60.0, <0.62.0", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_System_Console"] }
 
 [target.'cfg(windows)'.dev-dependencies]
-windows-sys = { version = ">=0.60, <0.62", features = ["Win32_Storage_FileSystem", "Win32_Foundation", "Win32_System_IO", "Win32_System_Console"] }
+windows-sys = { version = ">=0.60.0, <0.62.0", features = ["Win32_Storage_FileSystem", "Win32_Foundation", "Win32_System_IO", "Win32_System_Console"] }
 
 [features]
 termination = []
