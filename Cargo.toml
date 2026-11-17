@@ -15,7 +15,7 @@ readme = "README.md"
 rust-version = "1.71"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.32", default-features = false, features = ["signal"]}
+nix = { version = ">=0.30.0, <0.33.0", default-features = false, features = ["signal"]}
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 dispatch2 = "0.3"
