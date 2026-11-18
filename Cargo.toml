@@ -1,6 +1,6 @@
 [package]
 name = "ctrlc"
-version = "3.5.2"
+version = "3.5.3"
 description = "Easy Ctrl-C handler for Rust projects"
 documentation = "https://detegr.github.io/doc/ctrlc"
 homepage = "https://github.com/Detegr/rust-ctrlc"
