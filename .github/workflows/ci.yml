@@ -7,6 +7,41 @@ on:
     branches: [master]
 
 jobs:
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    env:
+      # All Tier 1 targets:
+      # https://doc.rust-lang.org/1.98.0/rustc/platform-support.html
+      TARGETS: |
+        aarch64-unknown-linux-gnu
+        i686-unknown-linux-gnu
+        x86_64-unknown-linux-gnu
+        i686-pc-windows-gnu
+        i686-pc-windows-msvc
+        x86_64-pc-windows-gnu
+        x86_64-pc-windows-msvc
+        x86_64-apple-darwin
+      # TODO(MSRV>=1.70): Remove once sparse is enabled by default.
+      # The Git registry protocol is significantly slower.
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: |
+            cargo-hack
+            cargo-minimal-versions
+          fallback: none
+      - name: Check
+        run: |
+          cargo minimal-versions check \
+            --workspace \
+            --feature-powerset \
+            --ignore-private \
+            --rust-version \
+            $(printf '%s\n' "$TARGETS" | xargs -n1 printf -- '--target %s ')
+
   test:
     strategy:
       fail-fast: false
