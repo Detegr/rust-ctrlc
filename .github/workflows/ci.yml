@@ -18,6 +18,8 @@ jobs:
             rust: stable-x86_64-pc-windows-gnu
           - os: windows-latest
             rust: nightly-x86_64-pc-windows-gnu
+          - os: windows-latest
+            rust: nightly-x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
